@@ -122,9 +122,13 @@ class Worker {
             }
         });
         this.view.connect('resource-load-started', (_view, resource, request) => {
-            if (!profileURI(this.view.get_uri()) || !AUTH_REQUESTS.includes(request.get_uri()) || request.get_http_method() !== 'GET') return;
+            const uri = request.get_uri() || '';
+            if (!uri.startsWith('https://intrapy.intra.42.fr/') || request.get_http_method() !== 'GET') return;
             try {
-                this.acceptAuthorization(request.get_http_headers().get_one('Authorization'));
+                const header = request.get_http_headers()?.get_one('Authorization');
+                if (header) {
+                    this.acceptAuthorization(header);
+                }
                 resource.connect('finished', () => {
                     if (stopped) return;
                     const response = resource.get_response();
@@ -143,9 +147,45 @@ class Worker {
             this.timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
                 this.tick(); return GLib.SOURCE_CONTINUE;
             });
-            this.view.load_uri(HOME);
-            status('loading');
+            // Try automatic background refresh first
+            if (!this.tryPythonRefresh()) {
+                this.view.load_uri(HOME);
+                status('loading');
+            }
         }
+    }
+
+    tryPythonRefresh() {
+        try {
+            const extDir = GLib.path_get_dirname(System.programPath);
+            const candidates = [
+                GLib.build_filenamev([extDir, 'token_refresher.py']),
+                GLib.build_filenamev([GLib.get_home_dir(), 'hack42', 'token_refresher.py']),
+                GLib.build_filenamev([GLib.get_home_dir(), 'hack42', 'intra_pure.py']),
+            ];
+            let pyScript = null;
+            for (const path of candidates) {
+                if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+                    pyScript = path;
+                    break;
+                }
+            }
+            if (!pyScript) return false;
+
+            const pyBin = GLib.find_program_in_path('python3') || '/usr/bin/python3';
+            const launcher = new Gio.SubprocessLauncher({
+                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
+            });
+            const proc = launcher.spawnv([pyBin, pyScript]);
+            const [ok, stdout, stderr] = proc.communicate_utf8(null, null);
+            proc.wait(null);
+            const token = (stdout || '').trim();
+            if (token && token.startsWith('eyJ')) {
+                this.acceptAuthorization(`Bearer ${token}`);
+                return true;
+            }
+        } catch (_) {}
+        return false;
     }
 
     acceptAuthorization(header) {
@@ -217,14 +257,20 @@ class Worker {
 
     tick() {
         if (stopped) return;
-        if (!this.auth && now() >= this.reloadAt && !this.window.get_visible() && !this.view.is_loading &&
-            profileURI(this.view.get_uri())) {
+        if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
+            if (this.tryPythonRefresh()) {
+                this.poll();
+                return;
+            }
             this.view.load_uri(HOME);
         }
         if (this.auth && !this.pending && now() >= this.nextPoll) this.poll();
-        if (!this.auth && !this.view.is_loading && now() - this.lastPageLoad > 30 && this.reloadAt === Infinity)
-            status('login-needed');
+        if (!this.auth && !this.view.is_loading && now() - this.lastPageLoad > 30 && this.reloadAt === Infinity) {
+            if (!this.tryPythonRefresh()) {
+                status('login-needed');
+            }
+        }
     }
 
     poll() {
@@ -249,6 +295,11 @@ class Worker {
             if (stopped || this.auth !== identity) return;
             if (state === 'auth-error') {
                 this.auth = null;
+                // Immediate background token refresh
+                if (this.tryPythonRefresh()) {
+                    this.poll();
+                    return;
+                }
                 this.reloadAt = now() + this.backoff;
             }
             if (state) this.fail(state, wait);

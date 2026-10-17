@@ -42,7 +42,7 @@ build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
-    gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js .
+    gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=token_refresher.py .
 )
 gnome-extensions install --force "$build/pingoose@local.shell-extension.zip"
 
