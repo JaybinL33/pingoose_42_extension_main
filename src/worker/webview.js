@@ -5,25 +5,24 @@ imports.gi.versions.Soup = '2.4';
 const {Gio, GLib, Gtk, Soup, WebKit2} = imports.gi;
 const ByteArray = imports.byteArray;
 const System = imports.system;
-imports.searchPath.unshift(GLib.path_get_dirname(System.programPath));
-const Model = imports.evaluations;
+const SOURCE_ROOT = GLib.path_get_dirname(GLib.path_get_dirname(System.programPath));
+imports.searchPath.unshift(SOURCE_ROOT);
+const Model = imports.models.evaluations;
+const {readProfileDOM, summarizeLogtime} = imports.worker.profile;
 const HOME = 'https://profile-v3.intra.42.fr/';
 const ENDPOINT = 'https://intrapy.intra.42.fr/api/v1/users/me/scale_teams';
 // Summary is also requested when the user hides the evaluations widget.
 const AUTH_REQUESTS = [ENDPOINT, 'https://intrapy.intra.42.fr/api/v1/users/me/summary'];
-const TEST = ARGV.includes('--self-test');
 const UID = new Gio.Credentials().get_unix_user();
 const now = () => GLib.get_monotonic_time() / 1000000;
 let worker = null;
 let owner = 0;
 let stopped = false;
 let exitCode = 0;
-const testMessages = [];
 let lastStatus = '';
 function emit(message) {
     if (stopped) return;
-    if (TEST) testMessages.push(message);
-    else print(JSON.stringify(message));
+    print(JSON.stringify(message));
 }
 function status(state, extra = {}) {
     const message = {type: 'status', state, ...extra};
@@ -66,83 +65,6 @@ function allowedURI(uri) {
 }
 
 // Read only the visible profile DOM; no page storage or authentication data.
-function readProfileDOM(login) {
-    const text = (document.body?.innerText || '').replace(/\s+/g, ' ');
-    const heading = Array.from(document.querySelectorAll('h1')).find(h => /^\d{1,3}$/.test(h.textContent.trim()));
-    const progress = text.match(/(?:^|\s)(\d{1,3})\s*%/);
-    const points = text.match(/Ev\.\s*P\s*(\d+)/i);
-    const pace = text.match(/Pace\s*(\d+)/i);
-    const deadlineLabel = text.match(/\b(Milestone\s+Deadline|Ultimate\s+Deadline|Black\s*holed\s+at|Alumni[sz]ation(?:\s+(?:at|date|on))?)\s*:?\s*(.{0,70})/i);
-    let deadline = null;
-    if (deadlineLabel) {
-        const raw = deadlineLabel[2];
-        let match = raw.match(/^(\d{4})[.\/年-]\s*(\d{1,2})[.\/月-]\s*(\d{1,2})/);
-        let parts = match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
-        if (!parts) {
-            match = raw.match(/^(\d{1,2})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{4})/);
-            if (match) {
-                const order = new Intl.DateTimeFormat(navigator.language).formatToParts(new Date(2026, 10, 23))
-                    .filter(part => ['day', 'month', 'year'].includes(part.type)).map(part => part.type);
-                const first = Number(match[1]), second = Number(match[2]);
-                const dayFirst = first > 12 || (second <= 12 && order[0] === 'day');
-                parts = [Number(match[3]), dayFirst ? second : first, dayFirst ? first : second];
-            }
-        }
-        if (parts) {
-            const [year, month, day] = parts;
-            const date = new Date(Date.UTC(year, month - 1, day));
-            if (date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day)
-                deadline = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        }
-    }
-    const avatar = Array.from(document.images).find(img => /^https:\/\/cdn\.intra\.42\.fr\/users\//.test(img.src));
-    const projects = [];
-    const seen = new Set();
-    for (const link of document.querySelectorAll('a[href]')) {
-        try {
-            const url = new URL(link.href);
-            const match = url.pathname.match(/^\/([a-zA-Z0-9_-]{1,100})\/([a-zA-Z0-9_-]{1,64})\/?$/);
-            if (url.origin !== 'https://projects.intra.42.fr' || !match || match[2] !== login ||
-                !link.textContent.trim() || seen.has(match[1])) continue;
-            seen.add(match[1]);
-            projects.push({name: link.textContent.trim().slice(0, 80), slug: match[1]});
-            if (projects.length === 20) break;
-        } catch (_) { /* Ignore unrelated links. */ }
-    }
-    return JSON.stringify({
-        profileLogin: avatar?.src.match(/\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i)?.[1] || null,
-        projects: projects.length || /\bprojects\b/i.test(text) ? projects : null,
-        name: document.querySelector('h2')?.textContent.trim().slice(0, 100) || '',
-        level: heading ? Number(heading.textContent.trim()) : null,
-        progress: progress ? Number(progress[1]) : null,
-        points: points ? Number(points[1]) : null,
-        pace: pace ? Number(pace[1]) : null,
-        deadline,
-        deadlineKind: !deadlineLabel ? null : /^milestone/i.test(deadlineLabel[1]) ? 'milestone' :
-            /^ultimate/i.test(deadlineLabel[1]) ? 'ultimate' : /^black/i.test(deadlineLabel[1]) ? 'blackhole' : 'alumnization',
-        avatar: avatar?.src || null,
-    });
-}
-
-function summarizeLogtime(data, date = new Date()) {
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid-logtime');
-    const year = date.getFullYear(), month = String(date.getMonth() + 1).padStart(2, '0');
-    const prefix = `${year}-${month}-`;
-    const today = prefix + String(date.getDate()).padStart(2, '0');
-    let total = 0, todaySeconds = null;
-    for (let day = 1; day <= date.getDate(); day++) {
-        const key = prefix + String(day).padStart(2, '0');
-        const value = data[key];
-        if (typeof value !== 'string' || !/^\d{2}:[0-5]\d:[0-5]\d$/.test(value)) throw new Error('incomplete-logtime');
-        const [h, m, s] = value.split(':').map(Number);
-        if (h > 24) throw new Error('invalid-duration');
-        const seconds = h * 3600 + m * 60 + s;
-        total += seconds;
-        if (key === today) todaySeconds = seconds;
-    }
-    return {date: today, monthMinutes: Math.floor(total / 60), todayMinutes: Math.floor(todaySeconds / 60)};
-}
-
 class Worker {
     constructor() {
         this.login = GLib.get_user_name();
@@ -154,7 +76,7 @@ class Worker {
         this.avatarURL = null;
         this.avatarResources = new Map();
         this.profileDiagnostics = {};
-        this.diagnosticUntil = TEST ? 0 : now() + 90;
+        this.diagnosticUntil = now() + 90;
         this.pending = null;
         this.nextPoll = Infinity;
         this.notBefore = 0;
@@ -163,29 +85,28 @@ class Worker {
         this.lastPageLoad = now();
         this.cancel = new Gio.Cancellable();
         this.session = new Soup.Session({timeout: 15, ssl_strict: true, user_agent: 'Pingoose/3'});
-        this.stateDirectory = TEST ? GLib.dir_make_tmp('pingoose-view-check-XXXXXX') :
-            GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose']);
+        this.stateDirectory = GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose']);
         privateDirectory(this.stateDirectory);
         this.signedOutFile = Gio.File.new_for_path(`${this.stateDirectory}/signed-out`);
         this.webLoginOnlyFile = Gio.File.new_for_path(`${this.stateDirectory}/web-login-only`);
-        this.signedOut = !TEST && this.signedOutFile.query_exists(null);
+        this.signedOut = this.signedOutFile.query_exists(null);
         this.clearingLogin = false;
         this.stateFile = Gio.File.new_for_path(`${this.stateDirectory}/intrapy-evaluations.json`);
         const directory = GLib.build_filenamev([GLib.get_user_data_dir(), 'pingoose']);
-        if (!TEST) privateDirectory(directory);
-        const manager = TEST ? WebKit2.WebsiteDataManager.new_ephemeral() : new WebKit2.WebsiteDataManager({
+        privateDirectory(directory);
+        const manager = new WebKit2.WebsiteDataManager({
             base_data_directory: `${directory}/profile`, base_cache_directory: `${directory}/cache`,
         });
         this.dataManager = manager;
         this.context = WebKit2.WebContext.new_with_website_data_manager(manager);
         this.context.connect('download-started', (_context, download) => download.cancel());
-        if (!TEST) this.context.get_cookie_manager().set_persistent_storage(
+        this.context.get_cookie_manager().set_persistent_storage(
             `${directory}/cookies.sqlite`, WebKit2.CookiePersistentStorage.SQLITE);
         this.view = new WebKit2.WebView({web_context: this.context});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
         this.window = new Gtk.Window({title: 'Loading…', default_width: 1000, default_height: 750});
         this.window.set_wmclass('42intra', '42Intra');
-        this.window.set_icon_from_file(GLib.build_filenamev([GLib.path_get_dirname(System.programPath), '42intra.png']));
+        this.window.set_icon_from_file(GLib.build_filenamev([SOURCE_ROOT, 'assets', '42intra.png']));
         const header = new Gtk.HeaderBar({title: 'Loading…', show_close_button: true});
         const syncPageTitle = () => {
             const title = (this.view.get_title() || '').trim() || 'Loading…';
@@ -215,7 +136,7 @@ class Worker {
         });
         this.view.connect('load-changed', (_view, event) => {
             if (event === WebKit2.LoadEvent.STARTED) this.lastPageLoad = now();
-            if (event === WebKit2.LoadEvent.FINISHED && !TEST && !this.auth) {
+            if (event === WebKit2.LoadEvent.FINISHED && !this.auth) {
                 status(profileURI(this.view.get_uri()) ? 'loading' : 'login-needed');
             }
         });
@@ -250,7 +171,7 @@ class Worker {
             }
         });
         this.view.show();
-        if (!TEST) {
+        {
             this.input = new Gio.DataInputStream({base_stream: new Gio.UnixInputStream({fd: 0, close_fd: false})});
             this.readCommand();
             this.timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
@@ -345,7 +266,7 @@ class Worker {
     }
 
     inspectProfileResource(resource, uri, response) {
-        if (!this.auth || this.signedOut || TEST || now() > this.diagnosticUntil || response?.get_status_code() !== 200) return;
+        if (!this.auth || this.signedOut || now() > this.diagnosticUntil || response?.get_status_code() !== 200) return;
         const path = uri.split('?')[0].replace('https://intrapy.intra.42.fr', '');
         // Only the signed-in user's profile requests, never other users or evaluations.
         if (!/^\/api\/v1\/users\/me(?:\/|$)/.test(path) ||
@@ -428,7 +349,7 @@ class Worker {
         let info;
         try { info = Model.claimsInfo(claims, this.login); }
         catch (error) {
-            if (error.message === 'account-error' && !TEST) this.logout('account-error');
+            if (error.message === 'account-error') this.logout('account-error');
             throw error;
         }
         if (this.auth?.header === header) { this.finishLogin(); return; }
@@ -612,14 +533,14 @@ class Worker {
 
     tick() {
         if (stopped || this.signedOut || this.clearingLogin) return;
-        if (!TEST && this.auth && now() >= this.nextProfileReload && now() >= this.notBefore &&
+        if (this.auth && now() >= this.nextProfileReload && now() >= this.notBefore &&
             !this.window.get_visible() && !this.view.is_loading) {
             this.nextProfileReload = now() + 45;
             this.nextProfileRead = now() + 3;
             this.view.reload_bypass_cache();
         }
-        if (!TEST && this.auth) { this.refreshLogtime(); this.pollAgenda(); }
-        if (!TEST && this.auth && now() >= this.nextProfileRead) this.readProfile();
+        if (this.auth) { this.refreshLogtime(); this.pollAgenda(); }
+        if (this.auth && now() >= this.nextProfileRead) this.readProfile();
         if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
             if (this.tryPythonRefresh()) {
@@ -801,7 +722,7 @@ class Worker {
     command(command) {
         if (command === 'slots:list' || command === 'slots:all' || command === 'slots:future' || /^slots:close:[0-9]+$/.test(command)) {
             if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
-            this.slotsService ||= new imports.slotsService.SlotsService(this.context, allowedURI);
+            this.slotsService ||= new imports.services.slotsService.SlotsService(this.context, allowedURI);
             if (this.slotsService.busy) return;
             const identity = this.auth;
             const action = command === 'slots:list' ? 'list' : command === 'slots:all' ? 'all' : command === 'slots:future' ? 'future' : 'close';
@@ -842,8 +763,7 @@ class Worker {
         }
         else if (command === 'show') { this.window.show_all(); this.window.present(); }
         else if (command === 'hide') this.window.hide();
-        else if (command === 'test' && (TEST || Gio.File.new_for_path(GLib.build_filenamev([GLib.path_get_dirname(System.programPath), 'devOptions.js'])).query_exists(null))) emit({type: 'notification', id: `test:${GLib.get_monotonic_time()}`,
-            test: true, body: 'This is a test notification for banners, cards and screen flash. Your evaluations are unchanged.'});
+
     }
 
     readCommand() {
@@ -866,96 +786,18 @@ class Worker {
         this.view.stop_loading();
         this.window.destroy();
         this.auth = null;
-        if (TEST) {
-            try { this.stateFile.delete(null); } catch (_) {}
-            try { Gio.File.new_for_path(this.stateDirectory).delete(null); } catch (_) {}
-        }
-    }
-}
 
-function selfTest() {
-    const assert = (condition, name) => { if (!condition) throw new Error(name); };
-    assert(!profileURI('https://profile-v3.intra.42.fr.evil.example/') &&
-        !profileURI('https://user@profile-v3.intra.42.fr/') && !allowedURI('http://auth.42.fr/') &&
-        !allowedURI('https://auth.42.fr:444/'), 'origin boundary');
-    worker = new Worker();
-    const claims = {iss: 'https://auth.42.fr/auth/realms/students-42', sub: 'fixture-subject',
-        preferred_username: GLib.get_user_name(), exp: Date.now() / 1000 + 600};
-    const encoded = GLib.base64_encode(ByteArray.fromString(JSON.stringify(claims)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    worker.acceptAuthorization(`Bearer e30.${encoded}.fixture-signature`);
-    const identity = worker.auth;
-    worker.acceptAuthorization(`Bearer e30.${encoded}.fixture-signature`);
-    assert(worker.auth === identity, 'duplicate token does not invalidate an in-flight request');
-    const row = {id: 123, kind: 'evaluator', begin_at: '2026-10-20T18:45:00+09:00', project_name: 'Fixture project'};
-    assert(worker.receive('[]', identity), 'empty baseline');
-    assert(worker.receive(JSON.stringify([row]), identity), 'new booking');
-    assert(worker.receive(JSON.stringify([row]), identity), 'duplicate');
-    assert(testMessages.filter(message => message.type === 'notification').length === 1, 'single notification');
-    assert(worker.readState().ids[0] === '123', 'native state reload');
-    worker.fail('rate-limit', 75);
-    const notBefore = worker.notBefore;
-    assert(worker.receive(JSON.stringify([row]), identity) && worker.nextPoll >= notBefore,
-        'a parallel successful request cannot bypass Retry-After');
-    worker.notBefore = 0;
-    assert((worker.stateFile.query_info('unix::mode', 0, null).get_attribute_uint32('unix::mode') & 0o777) === 0o600,
-        'private state mode');
-    assert(!worker.receive('{}', identity) && worker.readState().ids[0] === '123', 'bad response preserves state');
-    const upcoming = {...row, id: 124, kind: 'evaluated', user: null,
-        begin_at: new Date(Date.now() + 889000).toISOString()};
-    worker.lookupSeat = (booking, login) => assert(login === 'fixture-user', 'actual user field');
-    assert(worker.receive(JSON.stringify([upcoming]), identity), 'evaluatee accepted');
-    const reminders = () => testMessages.filter(message => message.type === 'notification' && message.id.startsWith('reminder:'));
-    assert(reminders().length === 1, '14m50s reminder');
-    worker.receive(JSON.stringify([upcoming]), identity);
-    assert(reminders().length === 1, 'reminder deduplicated');
-    upcoming.user = 'fixture-user';
-    worker.receive(JSON.stringify([upcoming]), identity);
-    assert(reminders().length === 2 && reminders()[1].body.includes('fixture-user'), 'late identity revealed');
-    worker.command('feedback:124');
-    assert(worker.evaluationState.evaluations.some(item => item.id === '124'), 'cannot dismiss before start');
-    upcoming.begin_at = new Date(Date.now() - 1000).toISOString();
-    worker.receive(JSON.stringify([upcoming]), identity);
-    worker.receive('[]', identity);
-    assert(worker.evaluationState.evaluations.some(item => item.id === '124'), 'retain after server removes booking');
-    const counterpart = Gio.File.new_for_path(`${worker.stateDirectory}/counterpart-fixture-user`);
-    counterpart.replace_contents(ByteArray.fromString('fixture'), null, false, Gio.FileCreateFlags.PRIVATE, null);
-    worker.command('feedback:124');
-    assert(!counterpart.query_exists(null), 'acknowledgement removes counterpart image');
-    assert(!worker.evaluationState.reminders.some(key => key.includes('fixture-user')), 'acknowledgement removes identity reminder metadata');
-    worker.receive(JSON.stringify([upcoming]), identity);
-    assert(!worker.readState().evaluations.some(item => item.id === '124'), 'feedback acknowledgement persists');
-    worker.stateFile.replace_contents(ByteArray.fromString('broken fixture'), null, false,
-        Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-    assert(!worker.receive('[]', identity), 'corrupt state refused');
-    assert(ByteArray.toString(worker.stateFile.load_contents(null)[1]) === 'broken fixture', 'corrupt state preserved');
-    worker.command('test');
-    assert(testMessages.at(-1).test === true, 'test command');
-    worker.view.connect('load-changed', (_view, event) => {
-        if (event !== WebKit2.LoadEvent.FINISHED) return;
-        worker.view.run_javascript_in_world('2 + 2', 'pingoose-test', null, (view, result) => {
-            try {
-                assert(view.run_javascript_in_world_finish(result).get_js_value().to_int32() === 4, 'native WebKit');
-                assert(!worker.window.get_visible(), 'hidden window');
-                print('PASS: private native storage, restart/dedup, failed snapshots, JWT account selection, hidden ephemeral WebKit and cleanup');
-                stop();
-            } catch (_) { print('FAIL: native WebKit self-check'); stop(1); }
-        });
-    });
-    worker.view.load_html('<!doctype html><title>Pingoose fixture</title>', 'about:blank');
-    GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 12, () => {
-        print('FAIL: native WebKit self-check timed out'); stop(1); return GLib.SOURCE_REMOVE;
-    });
+    }
 }
 
 GLib.set_prgname('42intra');
 GLib.set_application_name('42Intra');
-if (!TEST) {
+{
     // GNOME Shell matches this entry to the WebKit window's WM_CLASS.
     try {
         const applications = GLib.build_filenamev([GLib.get_user_data_dir(), 'applications']);
         GLib.mkdir_with_parents(applications, 0o755);
-        const icon = GLib.build_filenamev([GLib.path_get_dirname(System.programPath), '42intra.png']);
+        const icon = GLib.build_filenamev([SOURCE_ROOT, 'assets', '42intra.png']);
         const desktop = `[Desktop Entry]\nType=Application\nName=42Intra\nComment=42 Intra companion\nExec=gnome-extensions prefs pingoose@local\nIcon=${icon}\nStartupWMClass=42Intra\nNoDisplay=true\nTerminal=false\n`;
         const file = Gio.File.new_for_path(`${applications}/pingoose.desktop`);
         let previous = '';
@@ -966,15 +808,10 @@ if (!TEST) {
 Gtk.init(null);
 GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, 15, () => { stop(); return GLib.SOURCE_REMOVE; });
 GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, 2, () => { stop(); return GLib.SOURCE_REMOVE; });
-if (TEST) {
-    try { selfTest(); }
-    catch (error) { print(`FAIL: ${error.message}`); worker?.close(); System.exit(1); }
-} else {
     // The session bus releases ownership on crashes; no stale PID file or shared profile writers.
     owner = Gio.bus_own_name(Gio.BusType.SESSION, 'org.gnome.Shell.Extensions.Pingoose.Worker',
         Gio.BusNameOwnerFlags.DO_NOT_QUEUE, null,
         () => { try { worker = new Worker(); } catch (_) { status('worker-error'); stop(1); } },
         () => { if (!stopped) { status('worker-busy'); stop(1); } });
-}
 Gtk.main();
 System.exit(exitCode);

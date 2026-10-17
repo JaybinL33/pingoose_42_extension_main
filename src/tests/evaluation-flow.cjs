@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const model = require('../pingoose-v3-staging.1KaoVt/evaluations.js');
+const model = require('../models/evaluations.js');
 const row = {id: 123, kind: 'evaluator', begin_at: '2026-10-20T18:45:00+09:00', project_name: 'Codexion'};
 let state = model.advanceSeen(null, 'subject', model.parseRows([])).state;
 let plan = model.advanceSeen(state, 'subject', model.parseRows([row]));
@@ -14,7 +14,7 @@ assert.equal(model.advanceSeen(null, 'subject', model.parseRows([row])).added.le
 assert.equal(model.parseRows([{...row, kind: 'evaluated'}]).length, 1);
 assert.throws(() => model.parseRows([{...row, begin_at: 'invalid'}]));
 assert.equal(model.advanceSeen(state, 'subject', model.parseRows([row, {...row,id:124}])).added.length, 1);
-const source = fs.readFileSync('pingoose-v3-staging.1KaoVt/extension.js', 'utf8');
+const source = require('./source.cjs');
 class Actor {
  constructor(props={}) {Object.assign(this,props);this.children=[];this.clutter_text={};}
  add_child(child){this.children.push(child);}

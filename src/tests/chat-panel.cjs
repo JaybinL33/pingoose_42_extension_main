@@ -1,7 +1,7 @@
 const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert/strict');
-const source = fs.readFileSync('pingoose-v3-staging.1KaoVt/chatPanel.js','utf8');
+const source = fs.readFileSync('src/ui/chatPanel.js','utf8');
 const context = {};
 vm.createContext(context);
 vm.runInContext('class Probe {' + source.slice(source.indexOf('    sync()'),source.indexOf('    reset()')) + '}; globalThis.Probe=Probe;',context);

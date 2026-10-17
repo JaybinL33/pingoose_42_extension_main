@@ -4,7 +4,7 @@ class Actor{constructor(props={}){Object.assign(this,props);this.clutter_text={}
 class Modal{constructor(...args){this._init(...args);} _init(){this.contentLayout=new Actor();}setButtons(buttons){this.buttons=buttons;}connect(){}open(){return true;}destroy(){this.destroyed=true;} }
 class Native{_confirm(){loggedOut++;}_stopTimer(){}close(){}cancel(){cancelled++;}}
 const ctx={imports:{gi:{GLib:{get_monotonic_time:()=>clock,timeout_add_seconds:(_p,_s,cb)=>{const id=next++;timers.set(id,cb);return id;},source_remove:id=>timers.delete(id),SOURCE_REMOVE:false,SOURCE_CONTINUE:true},GObject:{registerClass:c=>c},St:{BoxLayout:Actor,Icon:Actor,Label:Actor},Clutter:{KEY_Escape:27}},ui:{main:{notify(){notices++;}},modalDialog:{ModalDialog:Modal},endSessionDialog:{EndSessionDialog:Native}}}};
-vm.createContext(ctx);vm.runInContext(fs.readFileSync('pingoose-v3-staging.1KaoVt/systemSessionHook.js','utf8'),ctx);
+vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/services/systemSessionHook.js','utf8'),ctx);
 const future={start:new Date(Date.now()+60000).toISOString()};let pending=[],commands=[];
 const hook=new ctx.SystemSessionHook((cmd,cb)=>{commands.push(cmd);pending.push(cb);},()=>true);hook.enable();
 new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[future]});assert.equal(notices,1);

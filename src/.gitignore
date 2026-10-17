@@ -5,3 +5,6 @@
 /.env.*
 *.zip
 __pycache__/
+
+schemas/gschemas.compiled
+dist/

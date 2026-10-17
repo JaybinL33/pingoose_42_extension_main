@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const {slotRequest} = require('../pingoose-v3-staging.1KaoVt/slotsService.js');
+const {slotRequest} = require('../services/slotsService.js');
 const one = {id: 1, ids: '1,2', title: 'Available', start: '2026-10-18T12:00:00+09:00', end: '2026-10-18T13:00:00+09:00'};
 let rows, posts, fail;
 global.document = {querySelector:()=>({content:'fixture-csrf'})};

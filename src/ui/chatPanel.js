@@ -3,7 +3,7 @@ const {Clutter, GLib, Pango, St} = imports.gi;
 const Main = imports.ui.main;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
-const Chat = Me.imports.chat;
+const Chat = Me.imports.services.chat;
 function wrapLabel(label) {
     label.clutter_text.line_wrap = true;
     label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;

@@ -1,0 +1,109 @@
+const {Clutter, Gio, GLib, St} = imports.gi;
+const Main = imports.ui.main;
+const ModalDialog = imports.ui.modalDialog;
+const PopupMenu = imports.ui.popupMenu;
+const Me = imports.misc.extensionUtils.getCurrentExtension();
+
+var Controller = class Controller {
+    _buildSettings() {
+        const indicator = this._indicator;
+        const toolbar = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        toolbar.remove_all_children();
+        toolbar.add_style_class_name('pingoose-toolbar');
+        indicator.menu.addMenuItem(toolbar, 0);
+        const mainItems = indicator.menu._getMenuItems();
+
+        const gear = new St.Button({style_class: 'pingoose-settings-button', can_focus: true,
+            x_expand: false, x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.START, accessible_name: 'More options'});
+        gear.set_child(new St.Label({text: '⋮', style_class: 'pingoose-more-icon'}));
+        const toolbarSpace = new St.Widget({x_expand: true});
+        toolbar.add_child(toolbarSpace);
+        toolbar.add_child(gear);
+        const welcome = new PopupMenu.PopupMenuSection();
+        indicator.menu.addMenuItem(welcome);
+        // A plain full-width container avoids menu-item ornament/indent columns.
+        const welcomeContent = new St.BoxLayout({vertical: true, x_expand: true,
+            style_class: 'pingoose-welcome-content'});
+        welcomeContent.add_child(new St.Label({text: 'Pingoose 42 Info', x_expand: true,
+            x_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-welcome-title'}));
+        const loginButton = new St.Button({can_focus: true, x_expand: true,
+            x_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-login-button'});
+        loginButton.set_child(new St.Label({text: 'Log in to 42 Intra',
+            x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER}));
+        loginButton.connect('clicked', () => { indicator.menu.close(); this._send('login'); });
+        welcomeContent.add_child(loginButton);
+        welcome.actor.add_child(welcomeContent);
+        const settings = new PopupMenu.PopupMenu(gear, 1.0, St.Side.TOP);
+        Main.uiGroup.add_child(settings.actor);
+        settings.actor.hide();
+        this._optionsMenu = settings;
+        this._optionsManager = new PopupMenu.PopupMenuManager(indicator);
+        this._optionsManager.addMenu(settings);
+        settings.addAction('Visit 42 Intra', () => { indicator.menu.close(); this._send('show'); });
+        settings.addAction('Settings', () => {
+            indicator.menu.close();
+            imports.misc.extensionUtils.openPrefs();
+        });
+        if (Gio.File.new_for_path(`${Me.path}/dev/devOptions.js`).query_exists(null)) {
+            Me.imports.dev.devOptions.addOptions(settings, () => this._message({type: 'notification',
+                id: `test:${GLib.get_monotonic_time()}`, test: true, body: 'Test notification'}), row => {
+                this._evaluations = [...this._evaluations, row];
+                this._renderEvaluations();
+                settings.close();
+            });
+        }
+        settings.addAction('Logout Intra', () => this._confirmIntraLogout());
+        const showMain = () => {
+            for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
+            welcome.actor.visible = indicator.loginOnly;
+            this._settingsVisible = false;
+            this._syncOptionalSections();
+        };
+        const sync = () => {
+            const theme = this._settings.get_string('theme');
+            indicator.menu.actor.remove_style_class_name('pingoose-dark');
+            indicator.menu.actor.remove_style_class_name('pingoose-light');
+            indicator.menu.actor.add_style_class_name(`pingoose-${theme}`);
+
+        };
+        this._themeChanged = this._settings.connect('changed', () => { sync(); showMain(); });
+        sync();
+        indicator.menu.connect('open-state-changed', (_menu, open) => {
+            if (!open) settings.close();
+            if (open) {
+                settings.close(); showMain();
+                this._unreadIds.clear();
+                for (const notification of this._notifications) notification.unread = false;
+                this._updatePanelLabel();
+            }
+        });
+        indicator.onLoginStateChanged = () => { settings.close(); showMain(); };
+        gear.connect('clicked', () => settings.toggle());
+        showMain();
+    }
+
+    _confirmIntraLogout() {
+        if (this._logoutDialog) return;
+        this._optionsMenu?.close();
+        this._indicator.menu.close();
+        const dialog = new ModalDialog.ModalDialog();
+        this._logoutDialog = dialog;
+        dialog.contentLayout.add_child(new St.Label({text: 'Log out of 42 Intra?',
+            style: 'font-weight: bold; font-size: 1.2em;'}));
+        dialog.contentLayout.add_child(new St.Label({text: 'You will need to log in again to view your Intra information.'}));
+        const finish = confirmed => {
+            this._logoutDialog = null;
+            dialog.destroy();
+            if (confirmed) {
+                this._chatPanel?.reset();
+                this._send('logout');
+            }
+        };
+        dialog.setButtons([
+            {label: 'Cancel', action: () => finish(false), key: Clutter.KEY_Escape, default: true},
+            {label: 'Log Out', action: () => finish(true)},
+        ]);
+        if (!dialog.open()) finish(false);
+    }
+
+};

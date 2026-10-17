@@ -1,7 +1,7 @@
 // Local-only transport test; no cluster host is contacted.
 const {Gio, GLib} = imports.gi;
-imports.searchPath.unshift(GLib.build_filenamev([GLib.get_current_dir(), 'pingoose-v3-staging.1KaoVt']));
-const Chat = imports.chat;
+imports.searchPath.unshift(GLib.build_filenamev([GLib.get_current_dir(), 'src']));
+const Chat = imports.services.chat;
 function assert(ok, message) { if (!ok) throw new Error(message); }
 assert(Chat.normalizePeer('C2R3S4').host === 'c2r3s4.42gyeongsan.kr', 'seat normalization');
 assert(Chat.normalizePeer('bad host') === null, 'invalid host rejected');

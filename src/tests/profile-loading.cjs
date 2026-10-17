@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const worker = fs.readFileSync('pingoose-v3-staging.1KaoVt/webview.js', 'utf8');
+const worker = fs.readFileSync('src/worker/profile.js', 'utf8');
 const context = {document:{body:{innerText:''},images:[],querySelector:()=>({textContent:'Fixture'}),querySelectorAll:()=>[]},navigator:{language:'en-US'}};
 vm.createContext(context);
 vm.runInContext(worker.slice(worker.indexOf('function readProfileDOM('),worker.indexOf('function summarizeLogtime(')),context);
@@ -22,7 +22,7 @@ for (const [label, kind] of [['Blackholed at', 'blackhole'], ['Black holed at', 
  context.document.body.innerText = `${label}: 2026-02-30 Projects`;
  assert.equal(JSON.parse(context.readProfileDOM('fixture')).deadline, null);
 }
-const source=fs.readFileSync('pingoose-v3-staging.1KaoVt/extension.js','utf8');
+const source=require('./source.cjs');
 let time=1000000;
 context.GLib={get_monotonic_time:()=>time};
 vm.runInContext('class Probe {'+source.slice(source.indexOf('    checkProfileReady()'),source.indexOf('    refreshLogtimeTitle()'))+'};globalThis.Probe=Probe',context);

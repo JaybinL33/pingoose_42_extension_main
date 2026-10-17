@@ -1,6 +1,6 @@
 const fs=require('node:fs');const vm=require('node:vm');const assert=require('node:assert/strict');
-const Model=require('../pingoose-v3-staging.1KaoVt/evaluations.js');
-const source=fs.readFileSync('pingoose-v3-staging.1KaoVt/webview.js','utf8');
+const Model=require('../models/evaluations.js');
+const source=fs.readFileSync('src/worker/webview.js','utf8');
 const messages=[];let callbacks=[];let saved=null;let clock=100;
 const context={Model,now:()=>clock,stopped:false,emit:m=>messages.push(m),Soup:{MessageFlags:{NO_REDIRECT:1},Message:{new:()=>({set_flags(){},request_headers:{append(){}}})}}};
 vm.createContext(context);vm.runInContext('class Probe {'+source.slice(source.indexOf('    pollAgenda()'),source.indexOf('    poll()'))+'};globalThis.Probe=Probe;',context);
