@@ -74,7 +74,7 @@ function notification(row) {
     const when = `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     const project = row.project.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
     return {type: 'notification', id: `intrapy:${row.id}`,
-        body: `시작 ${when}${project ? ` · ${project}` : ''}\n평가 ${row.id}`};
+        body: `Starts ${when}${project ? ` · ${project}` : ''}\nEvaluation ${row.id}`};
 }
 
 if (typeof module !== 'undefined')

@@ -38,13 +38,59 @@ except Exception as error:
     sys.exit(f'설치 전 확인 실패: {error}')
 PY
 
+# Match the running Shell's extension directory, not the invoking terminal's
+# XDG_DATA_HOME (Codex and the desktop can have different environments).
+active_data_home=$(/usr/bin/python3 - <<'PYDATA'
+from pathlib import Path
+from gi.repository import Gio, GLib
+bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+info = bus.call_sync('org.gnome.Shell', '/org/gnome/Shell',
+    'org.gnome.Shell.Extensions', 'GetExtensionInfo',
+    GLib.Variant('(s)', ('pingoose@local',)), None,
+    Gio.DBusCallFlags.NONE, 5000, None).unpack()[0]
+path = info.get('path', '')
+if path:
+    target = Path(path)
+    if target.parent.name != 'extensions' or target.parent.parent.name != 'gnome-shell':
+        raise SystemExit('설치 중단: 예상하지 못한 확장 경로')
+    if str(target).startswith(('/usr/', '/opt/')):
+        raise SystemExit('설치 중단: 시스템 확장을 사용자 설치로 덮어쓸 수 없습니다')
+    print(target.parent.parent.parent)
+PYDATA
+)
+if [[ -n "$active_data_home" ]]; then
+    export XDG_DATA_HOME="$active_data_home"
+    printf '실행 중인 GNOME 설치 경로 사용: %s/gnome-shell/extensions/pingoose@local\n' "$XDG_DATA_HOME"
+fi
+
 build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
     gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=token_refresher.py .
 )
-gnome-extensions install --force "$build/pingoose@local.shell-extension.zip"
+# Install the locally built package directly; the GNOME CLI can fail copying
+# across the desktop's home/USB filesystem boundary after removing the old copy.
+/usr/bin/python3 - "$build/pingoose@local.shell-extension.zip" <<'PYINSTALL'
+import os, zipfile
+from pathlib import Path
+root = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+target = root / 'gnome-shell/extensions/pingoose@local'
+target.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile(__import__('sys').argv[1]) as archive:
+    for entry in archive.infolist():
+        relative = Path(entry.filename)
+        if relative.is_absolute() or '..' in relative.parts:
+            raise SystemExit('Invalid package path')
+        destination = target / relative
+        if entry.is_dir():
+            destination.mkdir(parents=True, exist_ok=True)
+        else:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(archive.read(entry))
+            destination.chmod(0o644)
+print(f'패키지 설치 완료: {target}')
+PYINSTALL
 
 /usr/bin/python3 - <<'PY'
 import os, subprocess, sys, time

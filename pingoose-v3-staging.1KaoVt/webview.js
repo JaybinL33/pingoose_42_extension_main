@@ -65,10 +65,52 @@ function allowedURI(uri) {
     } catch (_) { return false; }
 }
 
+// Read only the visible profile DOM; no page storage or authentication data.
+function readProfileDOM(login) {
+    const text = (document.body?.innerText || '').replace(/\s+/g, ' ');
+    const heading = Array.from(document.querySelectorAll('h1')).find(h => /^\d{1,3}$/.test(h.textContent.trim()));
+    const progress = text.match(/(?:^|\s)(\d{1,3})\s*%/);
+    const points = text.match(/Ev\.\s*P\s*(\d+)/i);
+    const pace = text.match(/Pace\s*(\d+)/i);
+    const deadline = text.match(/Milestone Deadline\s*:\s*(\d{4})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})/i);
+    const avatar = Array.from(document.images).find(img => /^https:\/\/cdn\.intra\.42\.fr\/users\//.test(img.src));
+    const projects = [];
+    const seen = new Set();
+    for (const link of document.querySelectorAll('a[href]')) {
+        try {
+            const url = new URL(link.href);
+            const match = url.pathname.match(/^\/([a-zA-Z0-9_-]{1,100})\/([a-zA-Z0-9_-]{1,64})\/?$/);
+            if (url.origin !== 'https://projects.intra.42.fr' || !match || match[2] !== login ||
+                !link.textContent.trim() || seen.has(match[1])) continue;
+            seen.add(match[1]);
+            projects.push({name: link.textContent.trim().slice(0, 80), slug: match[1]});
+            if (projects.length === 20) break;
+        } catch (_) { /* Ignore unrelated links. */ }
+    }
+    return JSON.stringify({
+        profileLogin: avatar?.src.match(/\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i)?.[1] || null,
+        projects: projects.length || /\bprojects\b/i.test(text) ? projects : null,
+        name: document.querySelector('h2')?.textContent.trim().slice(0, 100) || '',
+        level: heading ? Number(heading.textContent.trim()) : null,
+        progress: progress ? Number(progress[1]) : null,
+        points: points ? Number(points[1]) : null,
+        pace: pace ? Number(pace[1]) : null,
+        deadline: deadline ? `${deadline[1]}-${deadline[2].padStart(2, '0')}-${deadline[3].padStart(2, '0')}` : null,
+        avatar: avatar?.src || null,
+    });
+}
+
 class Worker {
     constructor() {
         this.login = GLib.get_user_name();
         this.auth = null;
+        this.loginWindow = false;
+        this.nextProfileRead = 0;
+        this.profileReading = false;
+        this.avatarURL = null;
+        this.avatarResources = new Map();
+        this.profileDiagnostics = {};
+        this.diagnosticUntil = TEST ? 0 : now() + 90;
         this.pending = null;
         this.nextPoll = Infinity;
         this.notBefore = 0;
@@ -80,22 +122,27 @@ class Worker {
         this.stateDirectory = TEST ? GLib.dir_make_tmp('pingoose-view-check-XXXXXX') :
             GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose']);
         privateDirectory(this.stateDirectory);
+        this.signedOutFile = Gio.File.new_for_path(`${this.stateDirectory}/signed-out`);
+        this.webLoginOnlyFile = Gio.File.new_for_path(`${this.stateDirectory}/web-login-only`);
+        this.signedOut = !TEST && this.signedOutFile.query_exists(null);
+        this.clearingLogin = false;
         this.stateFile = Gio.File.new_for_path(`${this.stateDirectory}/intrapy-evaluations.json`);
         const directory = GLib.build_filenamev([GLib.get_user_data_dir(), 'pingoose']);
         if (!TEST) privateDirectory(directory);
         const manager = TEST ? WebKit2.WebsiteDataManager.new_ephemeral() : new WebKit2.WebsiteDataManager({
             base_data_directory: `${directory}/profile`, base_cache_directory: `${directory}/cache`,
         });
+        this.dataManager = manager;
         this.context = WebKit2.WebContext.new_with_website_data_manager(manager);
         this.context.connect('download-started', (_context, download) => download.cancel());
         if (!TEST) this.context.get_cookie_manager().set_persistent_storage(
             `${directory}/cookies.sqlite`, WebKit2.CookiePersistentStorage.SQLITE);
         this.view = new WebKit2.WebView({web_context: this.context});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
-        this.window = new Gtk.Window({title: 'Pingoose · 인트라 로그인', default_width: 1000, default_height: 750});
-        const header = new Gtk.HeaderBar({title: 'Pingoose · 인트라',
-            subtitle: '로그인 뒤 창을 닫아도 감시는 계속됩니다', show_close_button: true});
-        const home = new Gtk.Button({label: '인트라 홈'});
+        this.window = new Gtk.Window({title: 'Pingoose · Intra Login', default_width: 1000, default_height: 750});
+        const header = new Gtk.HeaderBar({title: 'Pingoose · Intra',
+            subtitle: 'This window closes automatically after login', show_close_button: true});
+        const home = new Gtk.Button({label: 'Intra Home'});
         home.connect('clicked', () => this.view.load_uri(HOME));
         header.pack_start(home);
         this.window.set_titlebar(header);
@@ -123,8 +170,21 @@ class Worker {
         });
         this.view.connect('resource-load-started', (_view, resource, request) => {
             const uri = request.get_uri() || '';
+            if (/^https:\/\/cdn\.intra\.42\.fr\/users\//.test(uri)) {
+                if (this.avatarResources.size >= 8) this.avatarResources.clear();
+                this.avatarResources.set(uri, resource);
+                resource.connect('finished', () => { this.nextProfileRead = 0; });
+            }
+            if (/logtime|locations/i.test(uri)) {
+                resource.connect('finished', () => this.inspectLogtime(resource, uri, resource.get_response()));
+            }
             if (!uri.startsWith('https://intrapy.intra.42.fr/') || request.get_http_method() !== 'GET') return;
             try {
+                this.observedPaths = this.observedPaths || new Set();
+                this.observedPaths.add(uri.split('?')[0]);
+                Gio.File.new_for_path(`${this.stateDirectory}/api-paths.json`).replace_contents(
+                    ByteArray.fromString(JSON.stringify([...this.observedPaths])), null, false,
+                    Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
                 const header = request.get_http_headers()?.get_one('Authorization');
                 if (header) {
                     this.acceptAuthorization(header);
@@ -132,12 +192,14 @@ class Worker {
                 resource.connect('finished', () => {
                     if (stopped) return;
                     const response = resource.get_response();
+                    this.inspectLogtime(resource, uri, response);
+                    this.inspectProfileResource(resource, uri, response);
                     if (response?.get_status_code() === 429)
                         this.fail('rate-limit', Model.retryAfter(response.get_http_headers()?.get_one('Retry-After')));
                 });
             } catch (error) {
-                this.auth = null;
-                status(error.message === 'account-error' ? 'account-error' : 'auth-error');
+                if (error.message === 'account-error') this.logout('account-error');
+                else { this.auth = null; status('auth-error'); }
             }
         });
         this.view.show();
@@ -148,14 +210,120 @@ class Worker {
                 this.tick(); return GLib.SOURCE_CONTINUE;
             });
             // Try automatic background refresh first
-            if (!this.tryPythonRefresh()) {
+            if (this.signedOut) status('login-needed');
+            else {
+                if (!this.tryPythonRefresh()) status('loading');
                 this.view.load_uri(HOME);
-                status('loading');
             }
         }
     }
 
+    readProfile() {
+        if (this.profileReading || !profileURI(this.view.get_uri())) return;
+        this.nextProfileRead = now() + 30;
+        this.profileReading = true;
+        const identity = this.auth;
+        this.view.run_javascript_in_world(`(${readProfileDOM.toString()})(${JSON.stringify(identity.login)})`, 'pingoose-profile', this.cancel, (view, result) => {
+            this.profileReading = false;
+            if (stopped || this.auth !== identity) return;
+            try {
+                const profile = JSON.parse(view.run_javascript_in_world_finish(result).get_js_value().to_string());
+                if (profile.profileLogin && profile.profileLogin !== identity.login) { this.logout('account-error'); return; }
+                if (!profile.name && profile.level === null) { this.nextProfileRead = now() + 3; return; }
+                emit({type: 'profile', login: identity.login, ...profile, avatar: undefined});
+                if (profile.avatar && profile.avatar !== this.avatarURL) this.loadAvatar(profile.avatar, identity);
+                const resource = this.avatarResources.get(profile.avatar);
+                const report = JSON.stringify({projects: profile.projects?.length ?? null, hasImage: !!profile.avatar, resources: this.avatarResources.size,
+                    matched: !!resource, httpStatus: resource?.get_response()?.get_status_code() ?? null});
+                if (report !== this.avatarReport) {
+                    this.avatarReport = report;
+                    Gio.File.new_for_path(`${this.stateDirectory}/profile-image-status.json`).replace_contents(
+                        ByteArray.fromString(report), null, false,
+                        Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+                }
+            } catch (_) { this.nextProfileRead = now() + 10; }
+        });
+    }
+
+    loadAvatar(url, identity) {
+        // Reuse the image loaded by the authenticated WebKit page. A separate
+        // HTTP client can be refused by the CDN even for the same image URL.
+        const resource = this.avatarResources.get(url);
+        if (!resource || !/^https:\/\/cdn\.intra\.42\.fr\/users\//.test(url)) return;
+        const response = resource.get_response();
+        if (!response || response.get_status_code() !== 200 ||
+            !/^image\//.test(response.get_mime_type() || '') || response.get_content_length() > 2000000) return;
+        this.avatarURL = url;
+        resource.get_data(this.cancel, (item, result) => {
+            try {
+                const image = item.get_data_finish(result);
+                if (stopped || this.auth !== identity) { this.avatarURL = null; return; }
+                if (!image || !image.length || image.length > 2000000) throw new Error('invalid-image');
+                Gio.File.new_for_path(`${this.stateDirectory}/profile-avatar`).replace_contents(image, null, false,
+                    Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+                emit({type: 'profile-avatar', login: identity.login});
+            } catch (_) { this.avatarURL = null; }
+        });
+    }
+
+    inspectLogtime(resource, uri, response) {
+        if (!this.auth || this.signedOut || !/logtime|locations/i.test(uri) || response?.get_status_code() !== 200) return;
+        resource.get_data(this.cancel, (item, result) => {
+            try {
+                if (!this.auth || this.signedOut || stopped) return;
+                const bytes = item.get_data_finish(result);
+                if (bytes.length > 1000000) return;
+                const body = JSON.parse(ByteArray.toString(bytes));
+                Gio.File.new_for_path(`${this.stateDirectory}/logtime-probe.json`).replace_contents(
+                    ByteArray.fromString(JSON.stringify({path: uri.split('?')[0], body})), null, false,
+                    Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+            } catch (_) {}
+        });
+    }
+
+    inspectProfileResource(resource, uri, response) {
+        if (!this.auth || this.signedOut || TEST || now() > this.diagnosticUntil || response?.get_status_code() !== 200) return;
+        const path = uri.split('?')[0].replace('https://intrapy.intra.42.fr', '');
+        // Only the signed-in user's profile requests, never other users or evaluations.
+        if (!/^\/api\/v1\/users\/me(?:\/|$)/.test(path) ||
+            /scale_teams|events|logtime|projects|feedback/.test(path) ||
+            Object.keys(this.profileDiagnostics).length >= 20 || this.profileDiagnostics[path]) return;
+        if (!/json/i.test(response.get_mime_type() || '') || response.get_content_length() > 1000000) return;
+        this.profileDiagnostics[path] = {pending: true};
+        resource.get_data(this.cancel, (item, result) => {
+            if (stopped || this.signedOut || !this.auth) return;
+            try {
+                const data = item.get_data_finish(result);
+                if (data.length > 1000000) return;
+                const body = JSON.parse(ByteArray.toString(data));
+                const fields = [];
+                const allowed = /^(login|preferred_username|display_name|first_name|last_name|level|correction_point|correction_points|evaluation_points|pace|deadline|milestone_deadline|begin_at|end_at|image_url|avatar_url|picture_url)$/;
+                const walk = (value, prefix, depth) => {
+                    if (depth > 7 || fields.length >= 300) return;
+                    if (Array.isArray(value)) { value.slice(0, 3).forEach((v, i) => walk(v, `${prefix}[${i}]`, depth + 1)); return; }
+                    if (!value || typeof value !== 'object') return;
+                    for (const [key, v] of Object.entries(value)) {
+                        if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(key) ||
+                            /token|secret|password|email|phone|address/i.test(key)) continue;
+                        const field = {path: `${prefix}.${key}`, type: v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v};
+                        if (allowed.test(key) && (typeof v === 'number' || typeof v === 'string'))
+                            field.value = typeof v === 'string' ? v.slice(0, 300) : v;
+                        fields.push(field);
+                        walk(v, field.path, depth + 1);
+                        if (fields.length >= 300) break;
+                    }
+                };
+                walk(body, '$', 0);
+                this.profileDiagnostics[path] = {fields};
+                Gio.File.new_for_path(`${this.stateDirectory}/profile-diagnostics.json`).replace_contents(
+                    ByteArray.fromString(JSON.stringify({checkedAt: new Date().toISOString(), endpoints: this.profileDiagnostics}, null, 2)),
+                    null, false, Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+            } catch (_) { this.profileDiagnostics[path] = {error: 'response-unavailable'}; }
+        });
+    }
+
     tryPythonRefresh() {
+        if (this.signedOut || this.webLoginOnlyFile.query_exists(null)) return false;
         try {
             const extDir = GLib.path_get_dirname(System.programPath);
             const candidates = [
@@ -189,15 +357,30 @@ class Worker {
     }
 
     acceptAuthorization(header) {
+        if (this.signedOut || this.clearingLogin) return;
         if (typeof header !== 'string' || header.length > 20000 ||
             !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(header)) throw new Error('auth-error');
         const payload = header.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
         const claims = JSON.parse(ByteArray.toString(GLib.base64_decode(payload + '='.repeat((4 - payload.length % 4) % 4))));
-        const info = Model.claimsInfo(claims, this.login);
-        if (this.auth?.header === header) return;
+        let info;
+        try { info = Model.claimsInfo(claims, this.login); }
+        catch (error) {
+            if (error.message === 'account-error' && !TEST) this.logout('account-error');
+            throw error;
+        }
+        if (this.auth?.header === header) { this.finishLogin(); return; }
         this.auth = {...info, header}; // Only this helper's memory; never emit or persist headers/claims.
         if (this.nextPoll === Infinity) this.nextPoll = now() + 1;
         this.reloadAt = Infinity;
+        status('authenticated');
+        this.finishLogin();
+    }
+
+    finishLogin() {
+        // A validated login token is sufficient; do not wait for navigation.
+        if (!this.loginWindow || !this.auth) return;
+        this.loginWindow = false;
+        this.window.hide();
     }
 
     readState() {
@@ -256,7 +439,8 @@ class Worker {
     }
 
     tick() {
-        if (stopped) return;
+        if (stopped || this.signedOut || this.clearingLogin) return;
+        if (!TEST && this.auth && now() >= this.nextProfileRead) this.readProfile();
         if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
             if (this.tryPythonRefresh()) {
@@ -334,12 +518,56 @@ class Worker {
         });
     }
 
+    logout(state = 'login-needed') {
+        if (this.clearingLogin) return;
+        this.signedOut = true;
+        this.clearingLogin = true;
+        this.auth = null;
+        this.pending?.cancel();
+        this.session.abort();
+        this.nextPoll = this.reloadAt = Infinity;
+        this.avatarURL = null;
+        this.avatarResources.clear();
+        this.view.stop_loading();
+        this.window.hide();
+        this.loginWindow = false;
+        for (const marker of [this.signedOutFile, this.webLoginOnlyFile])
+            marker.replace_contents(ByteArray.fromString('1'), null, false,
+                Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+        for (const name of ['profile-avatar', 'profile-diagnostics.json', 'profile-image-status.json']) {
+            try { Gio.File.new_for_path(`${this.stateDirectory}/${name}`).delete(null); } catch (_) {}
+        }
+        emit({type: 'signed-out'});
+        status(state);
+        this.view.load_uri('about:blank');
+        this.dataManager.clear(WebKit2.WebsiteDataTypes.ALL, 0, null, (manager, result) => {
+            try { manager.clear_finish(result); }
+            catch (_) { status('storage-error'); return; }
+            this.clearingLogin = false;
+        });
+    }
+
     command(command) {
         if (command === 'quit') stop();
+        else if (command === 'diagnose') {
+            this.profileDiagnostics = {};
+            this.diagnosticUntil = now() + 90;
+            this.view.load_uri(HOME);
+        }
+        else if (command === 'logout') this.logout();
+        else if (command === 'login') {
+            if (this.clearingLogin) return;
+            this.signedOut = false;
+            try { this.signedOutFile.delete(null); } catch (_) {}
+            this.loginWindow = true;
+            this.window.show_all();
+            this.window.present();
+            if (!this.view.is_loading) this.view.load_uri(HOME);
+        }
         else if (command === 'show') { this.window.show_all(); this.window.present(); }
         else if (command === 'hide') this.window.hide();
         else if (command === 'test') emit({type: 'notification', id: `test:${GLib.get_monotonic_time()}`,
-            test: true, body: '배너·카드·화면 점멸 테스트입니다. 실제 평가나 기준 목록은 바꾸지 않습니다.'});
+            test: true, body: 'This is a test notification for banners, cards and screen flash. Your evaluations are unchanged.'});
     }
 
     readCommand() {

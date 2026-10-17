@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
+    <key name="theme" type="s">
+      <choices><choice value="dark"/><choice value="light"/></choices>
+      <default>'dark'</default>
+      <summary>Profile menu color theme</summary>
+    </key>
     <key name="flash-count" type="i">
       <range min="0" max="5"/>
       <default>1</default>

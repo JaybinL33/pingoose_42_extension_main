@@ -1,19 +1,62 @@
 .pingoose-count { margin-left: 5px; font-size: 0.85em; }
 .pingoose-heading { font-weight: bold; }
-.pingoose-list { width: 370px; max-height: 400px; }
+.pingoose-list { width: 456px; max-width: 456px; max-height: 400px; }
 .pingoose-status { color: #b8b8b8; max-width: 360px; }
 .pingoose-card {
-    width: 340px;
+    width: 400px;
     padding: 12px;
     spacing: 6px;
     border-radius: 10px;
     background-color: rgba(255, 255, 255, 0.07);
 }
 .pingoose-card-title { font-weight: bold; color: #85d6cb; }
-.pingoose-card-body { max-width: 316px; }
+.pingoose-card-body { width: 400px; max-width: 400px; }
 .pingoose-card-time { font-size: 0.8em; color: #b8b8b8; }
 .pingoose-flash {
     background-color: transparent;
     border: 5px solid rgba(133, 214, 203, 0.75);
     border-radius: 14px;
 }
+
+.pingoose-profile { padding: 12px 0; spacing: 12px; }
+.pingoose-identity { spacing: 14px; }
+.pingoose-avatar { border-radius: 10px; background-color: rgba(255,255,255,0.08); }
+.pingoose-profile-name { font-size: 1.2em; font-weight: bold; }
+.pingoose-profile-login { color: #9ca9b4; font-size: 0.9em; }
+.pingoose-profile-level { color: #85d6cb; font-weight: bold; }
+.pingoose-progress-track { background-color: rgba(255,255,255,0.12); border-radius: 3px; }
+.pingoose-progress-fill { background-color: #85d6cb; border-radius: 3px; }
+.pingoose-profile-metrics { spacing: 24px; padding: 8px 0; }
+.pingoose-profile-caption { color: #9ca9b4; font-size: 0.85em; }
+.pingoose-profile-value { font-size: 1.4em; font-weight: bold; margin-top: 4px; }
+.pingoose-profile-deadline { font-weight: bold; }
+
+.pingoose-profile-stats { spacing: 9px; margin-top: 6px; }
+.pingoose-deadline-row { spacing: 6px; font-size: 0.9em; }
+.pingoose-deadline-row .pingoose-profile-caption { font-size: 1em; }
+.pingoose-deadline-danger { color: #ff6464; }
+
+.pingoose-profile-pace { color: #85d6cb; font-weight: bold; }
+
+.pingoose-settings-button { padding: 8px; border-radius: 8px; }
+.pingoose-settings-button:hover { background-color: rgba(127,127,127,0.2); }
+.pingoose-dark .popup-menu-content { background-color: #23272d; color: #edf0f4; }
+.pingoose-light .popup-menu-content { background-color: #f6f7f9; color: #20252c; }
+.pingoose-light .popup-menu-item { color: #20252c; }
+.pingoose-light .popup-menu-item:focus, .pingoose-light .popup-menu-item:hover { background-color: #dce7eb; }
+.pingoose-light .pingoose-profile-login, .pingoose-light .pingoose-profile-caption,
+.pingoose-light .pingoose-status, .pingoose-light .pingoose-card-time { color: #596673; }
+.pingoose-light .pingoose-profile-level, .pingoose-light .pingoose-profile-pace,
+.pingoose-light .pingoose-card-title { color: #16796b; }
+.pingoose-light .pingoose-card { background-color: #e7ecef; }
+.pingoose-light .pingoose-deadline-danger { color: #c92c36; }
+
+.pingoose-clear-button { padding: 6px 10px; border-radius: 6px; font-size: 0.85em; }
+.pingoose-clear-button:hover { background-color: rgba(127,127,127,0.2); }
+
+.pingoose-card-row { padding: 4px 12px 4px 0; }
+.pingoose-list StScrollBar { min-width: 8px; }
+
+.pingoose-dark .popup-menu-content, .pingoose-light .popup-menu-content { width: 500px; min-width: 500px; max-width: 500px; }
+.pingoose-study-row { spacing: 24px; padding: 6px 0; }
+.pingoose-study-value { font-weight: bold; }
