@@ -11,6 +11,17 @@ for (const kind of ['Ultimate', 'Milestone']) {
  assert.equal(data.deadline,'2026-10-18');
  assert.equal(data.deadlineKind,kind.toLowerCase());
 }
+for (const [label, kind] of [['Blackholed at', 'blackhole'], ['Black holed at', 'blackhole'],
+ ['Alumnization', 'alumnization'], ['Alumnization at', 'alumnization'], ['Alumnisation', 'alumnization']]) {
+ for (const raw of ['2026-10-18', '2026. 10. 18.', '10/18/2026']) {
+  context.document.body.innerText = `Pace 24 ${label}: ${raw} Projects`;
+  const data = JSON.parse(context.readProfileDOM('fixture'));
+  assert.equal(data.deadline, '2026-10-18');
+  assert.equal(data.deadlineKind, kind);
+ }
+ context.document.body.innerText = `${label}: 2026-02-30 Projects`;
+ assert.equal(JSON.parse(context.readProfileDOM('fixture')).deadline, null);
+}
 const source=fs.readFileSync('pingoose-v3-staging.1KaoVt/extension.js','utf8');
 let time=1000000;
 context.GLib={get_monotonic_time:()=>time};

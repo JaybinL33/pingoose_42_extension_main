@@ -218,7 +218,8 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         this.profileProgress.width = 90 * (progress ?? 0) / 100;
         this.profilePoints.text = `Ev.P ${number(data.points, 1000000) ?? '—'}`;
         this.profilePace.text = `Pace ${number(data.pace, 1000) ?? '—'} ·`;
-        this.deadlineCaption.text = data.deadlineKind === 'ultimate' ? 'Ultimate Deadline :' : 'Milestone Deadline :';
+        this.deadlineCaption.text = ({milestone: 'Milestone Deadline :', ultimate: 'Ultimate Deadline :',
+            blackhole: 'Blackholed at :', alumnization: 'Alumnization :'})[data.deadlineKind] || 'Milestone Deadline :';
         this.profileDeadline.text = deadlineText(data.deadline);
         if (number(data.pace, 1000) === 24 && this.profileDeadline.text !== '—')
             this.profileDeadline.add_style_class_name('pingoose-deadline-danger');

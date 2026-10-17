@@ -72,7 +72,7 @@ function readProfileDOM(login) {
     const progress = text.match(/(?:^|\s)(\d{1,3})\s*%/);
     const points = text.match(/Ev\.\s*P\s*(\d+)/i);
     const pace = text.match(/Pace\s*(\d+)/i);
-    const deadlineLabel = text.match(/(Milestone|Ultimate) Deadline\s*:?\s*(.{0,70})/i);
+    const deadlineLabel = text.match(/\b(Milestone\s+Deadline|Ultimate\s+Deadline|Black\s*holed\s+at|Alumni[sz]ation(?:\s+(?:at|date|on))?)\s*:?\s*(.{0,70})/i);
     let deadline = null;
     if (deadlineLabel) {
         const raw = deadlineLabel[2];
@@ -118,7 +118,8 @@ function readProfileDOM(login) {
         points: points ? Number(points[1]) : null,
         pace: pace ? Number(pace[1]) : null,
         deadline,
-        deadlineKind: deadlineLabel?.[1]?.toLowerCase() || null,
+        deadlineKind: !deadlineLabel ? null : /^milestone/i.test(deadlineLabel[1]) ? 'milestone' :
+            /^ultimate/i.test(deadlineLabel[1]) ? 'ultimate' : /^black/i.test(deadlineLabel[1]) ? 'blackhole' : 'alumnization',
         avatar: avatar?.src || null,
     });
 }
