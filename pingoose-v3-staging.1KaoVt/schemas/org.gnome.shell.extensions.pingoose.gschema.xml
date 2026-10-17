@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
+    <key name="flash-count" type="i">
+      <range min="0" max="5"/>
+      <default>1</default>
+      <summary>Number of screen-edge pulses per notification</summary>
+      <description>Zero disables the effect. Pulses start at least three seconds apart.</description>
+    </key>
+  </schema>
+</schemalist>

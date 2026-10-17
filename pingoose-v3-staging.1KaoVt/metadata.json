@@ -1,0 +1,8 @@
+{
+  "uuid": "pingoose@local",
+  "name": "Pingoose",
+  "description": "42 pending evaluation alerts using private Intra WebKit sign-in and the current Intra evaluation service.",
+  "shell-version": ["42"],
+  "settings-schema": "org.gnome.shell.extensions.pingoose",
+  "version": 3
+}

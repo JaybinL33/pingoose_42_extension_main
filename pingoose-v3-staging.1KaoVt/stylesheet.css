@@ -1,0 +1,19 @@
+.pingoose-count { margin-left: 5px; font-size: 0.85em; }
+.pingoose-heading { font-weight: bold; }
+.pingoose-list { width: 370px; max-height: 400px; }
+.pingoose-status { color: #b8b8b8; max-width: 360px; }
+.pingoose-card {
+    width: 340px;
+    padding: 12px;
+    spacing: 6px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.07);
+}
+.pingoose-card-title { font-weight: bold; color: #85d6cb; }
+.pingoose-card-body { max-width: 316px; }
+.pingoose-card-time { font-size: 0.8em; color: #b8b8b8; }
+.pingoose-flash {
+    background-color: transparent;
+    border: 5px solid rgba(133, 214, 203, 0.75);
+    border-radius: 14px;
+}
