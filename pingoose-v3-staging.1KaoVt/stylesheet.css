@@ -62,8 +62,8 @@
 .pingoose-study-value { font-weight: bold; }
 
 .pingoose-overview { spacing: 16px; }
-.pingoose-overview-column { width: 220px; spacing: 10px; }
-.pingoose-project-scroll { width: 220px; height: 116px; }
+.pingoose-overview-column { width: 202px; spacing: 8px; }
+.pingoose-project-scroll { width: 202px; max-height: 116px; }
 .pingoose-project-item { padding: 7px 8px 7px 0; }
 .pingoose-project-item StLabel { max-width: 180px; }
 .pingoose-logtime-column { padding-left: 12px; border-left: 1px solid rgba(127,127,127,0.25); }
@@ -78,5 +78,33 @@
 .pingoose-dark .pingoose-heading { color: #ffffff; }
 .pingoose-empty { padding-left: 0; }
 .pingoose-evaluation-scroll { width: 456px; max-height: 240px; }
-.pingoose-evaluation-card { width: 410px; padding: 10px; spacing: 6px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
-.pingoose-evaluation-card StLabel { max-width: 410px; }
+.pingoose-evaluation-card { width: 386px; padding: 10px; spacing: 6px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
+.pingoose-evaluation-card StLabel { max-width: 386px; }
+
+.pingoose-visit-intra { margin: 0 24px 0 0; padding: 8px 12px; border-radius: 10px; background-color: rgba(127,127,127,0.16); font-weight: bold; }
+.pingoose-visit-intra:hover, .pingoose-visit-intra:focus { background-color: rgba(127,127,127,0.30); }
+
+.pingoose-feedback-button { padding: 8px; border-radius: 6px; background-color: rgba(127,127,127,0.15); }
+.pingoose-feedback-button StLabel { width: 366px; max-width: 366px; text-align: center; }
+.pingoose-feedback-button:hover { background-color: rgba(127,127,127,0.3); }
+
+.pingoose-visit-intra StLabel { text-align: center; }
+
+.pingoose-overview-item { padding-left: 12px; padding-right: 12px; }
+
+.pingoose-visit-row { padding-top: 0; padding-bottom: 4px; }
+.pingoose-overview-item { padding-top: 4px; padding-bottom: 4px; }
+
+.pingoose-evaluation-title { font-size: 1.08em; font-weight: bold; color: #85d6cb; padding-bottom: 6px; }
+.pingoose-light .pingoose-evaluation-title { color: #16796b; }
+.pingoose-evaluation-person { spacing: 12px; padding: 6px 0; }
+.pingoose-person-details { spacing: 5px; }
+.pingoose-person-login { font-weight: bold; }
+.pingoose-person-seat, .pingoose-evaluation-time { color: #b8c2cc; font-size: 0.9em; }
+.pingoose-evaluation-time { padding-top: 8px; border-top: 1px solid rgba(127,127,127,0.2); }
+.pingoose-light .pingoose-person-seat, .pingoose-light .pingoose-evaluation-time { color: #596673; }
+
+.pingoose-welcome-title { font-size: 1.6em; font-weight: bold; text-align: center; padding: 24px 0 16px; }
+.pingoose-welcome-content { padding: 0 24px 16px; }
+.pingoose-login-button { width: 360px; padding: 12px 16px; margin: 0; border-radius: 10px; background-color: rgba(127,127,127,0.16); font-weight: bold; text-align: center; }
+.pingoose-login-button:hover, .pingoose-login-button:focus { background-color: rgba(127,127,127,0.3); }

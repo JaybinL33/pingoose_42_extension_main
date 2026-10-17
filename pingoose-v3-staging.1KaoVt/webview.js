@@ -72,10 +72,10 @@ function readProfileDOM(login) {
     const progress = text.match(/(?:^|\s)(\d{1,3})\s*%/);
     const points = text.match(/Ev\.\s*P\s*(\d+)/i);
     const pace = text.match(/Pace\s*(\d+)/i);
-    const deadlineLabel = text.match(/Milestone Deadline\s*:?\s*(.{0,70})/i);
+    const deadlineLabel = text.match(/(Milestone|Ultimate) Deadline\s*:?\s*(.{0,70})/i);
     let deadline = null;
     if (deadlineLabel) {
-        const raw = deadlineLabel[1];
+        const raw = deadlineLabel[2];
         let match = raw.match(/^(\d{4})[.\/年-]\s*(\d{1,2})[.\/月-]\s*(\d{1,2})/);
         let parts = match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
         if (!parts) {
@@ -118,6 +118,7 @@ function readProfileDOM(login) {
         points: points ? Number(points[1]) : null,
         pace: pace ? Number(pace[1]) : null,
         deadline,
+        deadlineKind: deadlineLabel?.[1]?.toLowerCase() || null,
         avatar: avatar?.src || null,
     });
 }
@@ -181,9 +182,14 @@ class Worker {
             `${directory}/cookies.sqlite`, WebKit2.CookiePersistentStorage.SQLITE);
         this.view = new WebKit2.WebView({web_context: this.context});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
-        this.window = new Gtk.Window({title: 'Pingoose · Intra Login', default_width: 1000, default_height: 750});
-        const header = new Gtk.HeaderBar({title: 'Pingoose · Intra',
-            subtitle: 'This window closes automatically after login', show_close_button: true});
+        this.window = new Gtk.Window({title: 'Loading…', default_width: 1000, default_height: 750});
+        const header = new Gtk.HeaderBar({title: 'Loading…', show_close_button: true});
+        const syncPageTitle = () => {
+            const title = (this.view.get_title() || '').trim() || 'Loading…';
+            this.window.set_title(title);
+            header.set_title(title);
+        };
+        this.view.connect('notify::title', syncPageTitle);
         const home = new Gtk.Button({label: 'Intra Home'});
         home.connect('clicked', () => this.view.load_uri(HOME));
         header.pack_start(home);
@@ -492,8 +498,16 @@ class Worker {
                     this.writeState(this.evaluationState);
                     emit({type: 'notification', id: `reminder:${reminderKey}`, body:
                         `Evaluation match confirmed · ${row.project}\n${row.users.length ? row.users.join(', ') : 'Someone (identity unavailable)'} · Seat: Unavailable`});
-                    for (const login of row.users) this.lookupSeat(row, login, identity);
+
                 }
+            }
+        }
+        this.counterpartChecks ||= new Map();
+        for (const row of rows.filter(row => !this.evaluationState.dismissed.includes(row.id))) for (const login of row.users) {
+            const key = `${row.id}:${login}`;
+            if (now() >= (this.counterpartChecks.get(key) || 0)) {
+                this.counterpartChecks.set(key, now() + 300);
+                this.lookupSeat(row, login, identity);
             }
         }
         this.backoff = 20;
@@ -522,6 +536,34 @@ class Worker {
             }
             return false;
         });
+        let avatarSaved = false;
+        let foundSeat = null;
+        view.connect('resource-load-started', (_view, resource, request) => {
+            const uri = request.get_uri() || '';
+            const match = uri.match(/^https:\/\/cdn\.intra\.42\.fr\/users\/.*\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i);
+            if (!match || match[1] !== login) return;
+            resource.connect('finished', () => {
+                const response = resource.get_response();
+                if (response?.get_status_code() !== 200 || !/^image\//.test(response.get_mime_type() || '')) return;
+                resource.get_data(this.cancel, (item, result) => {
+                    try {
+                        const bytes = item.get_data_finish(result);
+                        if (stopped || this.auth !== identity || !bytes?.length || bytes.length > 2000000) return;
+                        const active = this.evaluationState?.evaluations.find(value => value.id === row.id);
+                        if (!active || !active.users.includes(login)) return;
+                        Gio.File.new_for_path(`${this.stateDirectory}/counterpart-${login}`).replace_contents(bytes, null, false,
+                            Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+                        avatarSaved = true;
+                        const stored = this.evaluationState?.evaluations.find(value => value.id === row.id);
+                        if (stored) {
+                            stored.avatars = [...new Set([...(stored.avatars || []), login])];
+                            this.writeState(this.evaluationState);
+                            this.publishEvaluations();
+                        }
+                    } catch (_) { /* Keep the placeholder; retry on a later refresh. */ }
+                });
+            });
+        });
         let finished = false;
         const finish = seat => {
             if (finished) return;
@@ -531,17 +573,18 @@ class Worker {
             row.seats = {...row.seats, [login]: seat || 'Unavailable'};
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id);
             if (stored) { stored.seats = {...stored.seats, ...row.seats}; this.writeState(this.evaluationState); this.publishEvaluations(); }
-            if (seat) emit({type: 'notification', id: `seat:${row.id}:${login}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
+            if (seat && stored) emit({type: 'notification', id: `seat:${row.id}:${login}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
         };
         let attempts = 0;
         const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
             if (finished) return GLib.SOURCE_REMOVE;
-            if (++attempts >= 10 || stopped || this.auth !== identity) { finish(null); return GLib.SOURCE_REMOVE; }
+            if (++attempts >= 10 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
             // Seat lookup is deliberately conservative: no arbitrary page text is reported.
             view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length ? '' : e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`, 'pingoose-seat', this.cancel, (page, result) => {
                 try {
                     const seat = JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
-                    if (seat) { GLib.source_remove(timer); finish(seat); }
+                    if (seat) foundSeat = seat;
+                    if (foundSeat && (avatarSaved || attempts >= 5)) { GLib.source_remove(timer); finish(foundSeat); }
                 } catch (_) {}
             });
             return GLib.SOURCE_CONTINUE;
@@ -566,7 +609,7 @@ class Worker {
             this.nextProfileRead = now() + 3;
             this.view.reload_bypass_cache();
         }
-        if (!TEST && this.auth) this.refreshLogtime();
+        if (!TEST && this.auth) { this.refreshLogtime(); this.pollAgenda(); }
         if (!TEST && this.auth && now() >= this.nextProfileRead) this.readProfile();
         if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
@@ -582,6 +625,56 @@ class Worker {
                 status('login-needed');
             }
         }
+    }
+
+    pollAgenda() {
+        if (!this.auth || this.agendaPending || now() < (this.nextAgendaPoll || 0) || now() < this.notBefore) return;
+        const identity = this.auth;
+        this.agendaPending = true;
+        this.nextAgendaPoll = now() + 30;
+        const results = [];
+        let completed = 0;
+        const finish = (index, rows) => {
+            results[index] = rows;
+            if (++completed !== 2) return;
+            this.agendaPending = false;
+            if (stopped || this.auth !== identity || results.some(value => value === null)) return;
+            try {
+                // Replace only after both snapshots succeed; errors must not erase the list.
+                const merged = new Map(results[0].map(row => [row.id, row]));
+                for (const row of results[1]) merged.set(row.id, row);
+                const rows = [...merged.values()].slice(0, 100);
+                const state = Model.advanceSeen(this.readState(), identity.subject, []).state;
+                const seen = new Set(state.agendaIds);
+                state.agendaIds = [...new Set([...state.agendaIds, ...rows.map(row => row.id)])].slice(-2000);
+                this.writeState(state);
+                if (this.evaluationState?.subject === state.subject) this.evaluationState.agendaIds = state.agendaIds;
+                emit({type: 'agenda', rows});
+                for (const row of rows) if (!seen.has(row.id)) emit({type: 'notification', id: `agenda:${row.id}`,
+                    category: 'agenda', body: `New agenda event · ${row.name}\n${new Date(row.begin).toLocaleString('en-GB')}${row.location ? ` · ${row.location}` : ''}`});
+            } catch (_) { this.nextAgendaPoll = now() + 60; }
+        };
+        ['', '/unfeedbacked'].forEach((suffix, index) => {
+            const message = Soup.Message.new('GET', `https://intrapy.intra.42.fr/api/v1/users/me/events${suffix}`);
+            message.set_flags(Soup.MessageFlags.NO_REDIRECT);
+            message.request_headers.append('Authorization', identity.header);
+            message.request_headers.append('Accept', 'application/json');
+            this.session.queue_message(message, (_session, response) => {
+                let rows = null;
+                if (!stopped && this.auth === identity) {
+                    if (response.status_code === 429 || response.status_code === 503) {
+                        const delay = Math.max(30, Model.retryAfter(response.response_headers.get_one('Retry-After')));
+                        this.notBefore = Math.max(this.notBefore, now() + delay);
+                        this.nextAgendaPoll = Math.max(this.nextAgendaPoll, this.notBefore);
+                    }
+                    try {
+                        if (response.status_code === 200 && response.response_body.length <= 1000000)
+                            rows = Model.parseAgenda(JSON.parse(response.response_body.data), index === 1);
+                    } catch (_) { this.nextAgendaPoll = now() + 60; }
+                }
+                finish(index, rows);
+            });
+        });
     }
 
     poll() {
@@ -651,6 +744,7 @@ class Worker {
         this.clearingLogin = true;
         this.auth = null;
         this.evaluationState = null;
+        this.cleanupCounterpartImages();
         this.pending?.cancel();
         this.session.abort();
         this.nextPoll = this.reloadAt = Infinity;
@@ -677,6 +771,22 @@ class Worker {
         });
     }
 
+    cleanupCounterpartImages() {
+        const retained = new Set((this.evaluationState?.evaluations || []).flatMap(row => row.users));
+        const directory = Gio.File.new_for_path(this.stateDirectory);
+        let files;
+        try {
+            files = directory.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null);
+            let info;
+            while ((info = files.next_file(null))) {
+                const name = info.get_name();
+                const match = name.match(/^counterpart-([a-zA-Z0-9_-]{1,64})$/);
+                if (match && !retained.has(match[1])) directory.get_child(name).delete(null);
+            }
+        } catch (_) { /* Retry cleanup on subsequent acknowledgements or logout. */ }
+        finally { files?.close(null); }
+    }
+
     command(command) {
         if (command.startsWith('feedback:')) {
             const id = command.slice(9);
@@ -685,7 +795,11 @@ class Worker {
             if (!row || Date.parse(row.begin) > Date.now()) return;
             this.evaluationState.dismissed = [...new Set([...this.evaluationState.dismissed, id])].slice(-2000);
             this.evaluationState.evaluations = this.evaluationState.evaluations.filter(item => item.id !== id);
+            this.evaluationState.reminders = this.evaluationState.reminders.filter(key => !key.startsWith(`${id}:`));
+            for (const key of this.counterpartChecks?.keys() || []) if (key.startsWith(`${id}:`)) this.counterpartChecks.delete(key);
             this.writeState(this.evaluationState);
+            this.cleanupCounterpartImages();
+            emit({type: 'evaluation-dismissed', id});
             this.publishEvaluations();
         }
         else if (command === 'quit') stop();
@@ -781,7 +895,11 @@ function selfTest() {
     worker.receive(JSON.stringify([upcoming]), identity);
     worker.receive('[]', identity);
     assert(worker.evaluationState.evaluations.some(item => item.id === '124'), 'retain after server removes booking');
+    const counterpart = Gio.File.new_for_path(`${worker.stateDirectory}/counterpart-fixture-user`);
+    counterpart.replace_contents(ByteArray.fromString('fixture'), null, false, Gio.FileCreateFlags.PRIVATE, null);
     worker.command('feedback:124');
+    assert(!counterpart.query_exists(null), 'acknowledgement removes counterpart image');
+    assert(!worker.evaluationState.reminders.some(key => key.includes('fixture-user')), 'acknowledgement removes identity reminder metadata');
     worker.receive(JSON.stringify([upcoming]), identity);
     assert(!worker.readState().evaluations.some(item => item.id === '124'), 'feedback acknowledgement persists');
     worker.stateFile.replace_contents(ByteArray.fromString('broken fixture'), null, false,

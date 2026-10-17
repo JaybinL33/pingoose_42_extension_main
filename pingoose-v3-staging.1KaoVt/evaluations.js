@@ -58,7 +58,7 @@ function storedState(text) {
         !/^[A-Za-z0-9_-]{1,128}$/.test(state.subject) || !Array.isArray(state.ids) ||
         state.ids.length > MAX_SEEN || state.ids.some(id => typeof id !== 'string' || identifier(id) !== id) ||
         new Set(state.ids).size !== state.ids.length) throw new Error('storage-error');
-    for (const field of ['dismissed', 'reminders']) {
+    for (const field of ['dismissed', 'reminders', 'agendaIds']) {
         if (state[field] === undefined) state[field] = [];
         if (!Array.isArray(state[field]) || state[field].length > MAX_SEEN ||
             state[field].some(value => typeof value !== 'string' || value.length > 512)) throw new Error('storage-error');
@@ -69,6 +69,7 @@ function storedState(text) {
         const parsed = parseRows([{...row, begin_at: row.begin, project_name: row.project,
             user: row.users, project_slug: row.slug}])[0];
         if (!parsed) throw new Error('storage-error');
+        parsed.avatars = Array.isArray(row.avatars) ? row.avatars.filter(login => parsed.users.includes(login)) : [];
         parsed.seats = {};
         for (const login of parsed.users) {
             const seat = row.seats?.[login];
@@ -84,7 +85,23 @@ function advanceSeen(previous, subject, rows) {
     const old = baseline ? previous.ids : [];
     const seen = new Set(old);
     const ids = [...new Set([...rows.map(row => row.id), ...old])].slice(0, MAX_SEEN);
-    return {state: {version: 1, subject, ids, evaluations: baseline ? (previous.evaluations || []) : [], dismissed: baseline ? (previous.dismissed || []) : [], reminders: baseline ? (previous.reminders || []) : []}, added: rows.filter(row => !seen.has(row.id))};
+    return {state: {version: 1, subject, ids, evaluations: baseline ? (previous.evaluations || []) : [], dismissed: baseline ? (previous.dismissed || []) : [], reminders: baseline ? (previous.reminders || []) : [], agendaIds: baseline ? (previous.agendaIds || []) : []}, added: rows.filter(row => !seen.has(row.id))};
+}
+
+function parseAgenda(data, feedback = false) {
+    if (!Array.isArray(data) || data.length > 1000) throw new Error('response-error');
+    return data.map(row => {
+        const id = identifier(row?.id);
+        const name = row.name;
+        const begin = row.begin_at ?? row.beginAt;
+        const end = row.end_at ?? row.endAt;
+        if (typeof name !== 'string' || !name.trim() || name.length > 500 ||
+            typeof begin !== 'string' || !Number.isFinite(Date.parse(begin)) ||
+            typeof end !== 'string' || !Number.isFinite(Date.parse(end))) throw new Error('response-error');
+        const utc = value => /(?:Z|[+-]\d{2}:\d{2})$/.test(value) ? value : `${value}Z`;
+        return {id, name, begin: utc(begin), end: utc(end), feedback,
+            location: typeof row.location === 'string' ? row.location.slice(0, 200) : ''};
+    });
 }
 
 function retryAfter(value, now = Date.now()) {
@@ -107,4 +124,4 @@ function notification(row) {
 }
 
 if (typeof module !== 'undefined')
-    module.exports = {identifier, claimsInfo, parseRows, storedState, advanceSeen, retryAfter, notification};
+    module.exports = {identifier, claimsInfo, parseRows, storedState, advanceSeen, retryAfter, notification, parseAgenda};
