@@ -19,6 +19,7 @@ class Actor {
  constructor(props={}) {Object.assign(this,props);this.children=[];this.clutter_text={};}
  add_child(child){this.children.push(child);}
  set_child(child){this.child=child;this.label=child.text;}
+ remove_all_children(){this.children=[];}
  set_style(){}
  add_style_class_name(){}
  connect(name, fn){this[name]=fn;}
@@ -28,7 +29,7 @@ let banners=0;
 const context={PopupMenu:{PopupBaseMenuItem:Actor,PopupMenuItem:Actor},St:{BoxLayout:Actor,Label:Actor,Button:Actor,Bin:Actor,Icon:Actor},Clutter:{ActorAlign:{CENTER:0,END:1}},Pango:{WrapMode:{WORD_CHAR:0},EllipsizeMode:{NONE:0}},Main:{notify(){banners++;}},GLib:{DateTime:{new_now_local:()=>({format:()=> '18:45'})}}};
 vm.createContext(context);
 vm.runInContext('class Probe {'+source.slice(source.indexOf('    _message(message)'),source.indexOf('    _flashScreen('))+source.slice(source.indexOf('    _renderCards()'),source.indexOf('    disable()'))+'}; globalThis.Probe=Probe;',context);
-const p=new context.Probe();p._syncOptionalSections=()=>{};p._updatePanelLabel=()=>{};p._notifications=[];p._indicator={cards:new Section(),menu:{isOpen:false},count:{},profileReady:true,loginOnly:false};p._flashScreen=()=>{};
+const p=new context.Probe();p._syncOptionalSections=()=>{};p._updatePanelLabel=()=>{};p._notifications=[];p._indicator={cards:new Section(),menu:{isOpen:false},count:{},profileReady:true,loginOnly:false};p._flashScreen=()=>{};p._showBanner=()=>{banners++;};
 p._message(event);
 assert.equal(p._notifications.length,1);assert.equal(banners,1);assert.equal(p._indicator.cards.items.length,2);
 p._message(event);assert.equal(banners,1);
@@ -60,7 +61,8 @@ visibility._indicator=Object.fromEntries(['evaluationItem','evaluationSeparator'
 visibility._evaluations=[];visibility._notifications=[];visibility._syncOptionalSections();
 assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
 visibility._evaluations=[{}];visibility._notifications=[{}];visibility._agenda=[{}];visibility._syncOptionalSections();
-assert.ok(Object.values(visibility._indicator).every(item=>item.actor.visible));
+assert.ok(Object.entries(visibility._indicator).filter(([key])=>key !== 'notificationSeparator').every(([,item])=>item.actor.visible));
+assert.equal(visibility._indicator.notificationSeparator.actor.visible,false);
 visibility._settingsVisible=true;visibility._syncOptionalSections();
 assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
 console.log('PASS: empty sections and separators hidden; populated sections visible only on main page');
@@ -71,3 +73,9 @@ panel._agenda=[{feedback:true}];panel._updatePanelLabel();assert.equal(panel._in
 panel._evaluations=[{begin:new Date(Date.now()-1000).toISOString()}];panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'Feedback 2');
 panel._agenda=[];panel._evaluations=[];panel._notifications[0].unread=false;panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'42');
 console.log('PASS: panel unread count, feedback priority/count and return to 42');
+panel._unreadIds=new Set(['1','2','3','4','5']);panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'New 5');
+panel._unreadIds.add('6');panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'New 5+');
+panel._agenda=Array.from({length:6},()=>({feedback:true}));panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'Feedback 5+');
+panel._agenda.pop();panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'Feedback 5');
+assert.ok(p._unreadIds.size === 0);
+console.log('PASS: New/Feedback show 5 at five, 5+ above five; Clear All resets unread tracking');

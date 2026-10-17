@@ -1,16 +1,16 @@
 .pingoose-count { margin-left: 5px; font-size: 0.85em; }
 .pingoose-heading { font-weight: 800; font-size: 1.12em; }
-.pingoose-list { width: 456px; max-width: 456px; max-height: 400px; }
+.pingoose-list { width: 436px; max-width: 436px; max-height: 400px; }
 .pingoose-status { color: #b8b8b8; max-width: 360px; }
 .pingoose-card {
-    width: 326px;
+    width: 352px;
     padding: 12px;
     spacing: 6px;
     border-radius: 10px;
     background-color: rgba(255, 255, 255, 0.07);
 }
 .pingoose-card-title { font-weight: bold; color: #85d6cb; }
-.pingoose-card-body { width: 326px; max-width: 326px; }
+.pingoose-card-body { width: 352px; max-width: 352px; }
 .pingoose-card-time { font-size: 0.8em; color: #b8b8b8; }
 .pingoose-flash {
     background-color: transparent;
@@ -18,10 +18,10 @@
     border-radius: 14px;
 }
 
-.pingoose-profile { padding: 12px 0; spacing: 12px; }
+.pingoose-profile { padding: 0 0 12px; spacing: 12px; }
 .pingoose-identity { spacing: 14px; }
 .pingoose-avatar { border-radius: 10px; background-color: rgba(255,255,255,0.08); }
-.pingoose-profile-name { font-size: 1.2em; font-weight: bold; }
+.pingoose-profile-name { font-size: 1.28em; font-weight: bold; }
 .pingoose-profile-login { color: #9ca9b4; font-size: 0.9em; }
 .pingoose-profile-level { color: #85d6cb; font-weight: bold; }
 .pingoose-progress-track { background-color: rgba(255,255,255,0.12); border-radius: 3px; }
@@ -31,14 +31,14 @@
 .pingoose-profile-value { font-size: 1.4em; font-weight: bold; margin-top: 4px; }
 .pingoose-profile-deadline { font-weight: bold; }
 
-.pingoose-profile-stats { spacing: 9px; margin-top: 6px; }
+.pingoose-profile-stats { spacing: 6px; margin-top: 6px; }
 .pingoose-deadline-row { spacing: 6px; font-size: 0.9em; }
 .pingoose-deadline-row .pingoose-profile-caption { font-size: 1em; }
 .pingoose-deadline-danger { color: #ff6464; }
 
 .pingoose-profile-pace { color: #85d6cb; font-weight: bold; }
 
-.pingoose-settings-button { padding: 8px; border-radius: 8px; }
+.pingoose-settings-button { width: 22px; height: 22px; padding: 2px; border-radius: 6px; }
 .pingoose-settings-button:hover { background-color: rgba(127,127,127,0.2); }
 .pingoose-dark .popup-menu-content { background-color: #23272d; color: #edf0f4; }
 .pingoose-light .popup-menu-content { background-color: #f6f7f9; color: #20252c; }
@@ -54,16 +54,16 @@
 .pingoose-clear-button { padding: 6px 10px; border-radius: 6px; font-size: 0.85em; }
 .pingoose-clear-button:hover { background-color: rgba(127,127,127,0.2); }
 
-.pingoose-card-row { padding: 5px 28px 5px 0; }
+.pingoose-card-row { padding: 5px 16px 5px 0; }
 .pingoose-list StScrollBar { min-width: 8px; }
 
-.pingoose-dark .popup-menu-content, .pingoose-light .popup-menu-content { width: 500px; min-width: 500px; max-width: 500px; }
+.pingoose-dark .popup-menu-content, .pingoose-light .popup-menu-content { width: 460px; min-width: 460px; max-width: 460px; padding-left: 0; padding-right: 0; }
 .pingoose-study-row { spacing: 24px; padding: 6px 0; }
 .pingoose-study-value { font-weight: bold; }
 
 .pingoose-overview { spacing: 16px; }
-.pingoose-overview-column { width: 202px; spacing: 8px; }
-.pingoose-project-scroll { width: 202px; max-height: 116px; }
+.pingoose-overview-column { width: 188px; spacing: 8px; }
+.pingoose-project-scroll { width: 188px; max-height: 116px; }
 .pingoose-project-item { padding: 7px 8px 7px 0; }
 .pingoose-project-item StLabel { max-width: 180px; }
 .pingoose-logtime-column { padding-left: 12px; border-left: 1px solid rgba(127,127,127,0.25); }
@@ -77,27 +77,27 @@
 
 .pingoose-dark .pingoose-heading { color: #ffffff; }
 .pingoose-empty { padding-left: 0; }
-.pingoose-evaluation-scroll { width: 456px; max-height: 240px; }
-.pingoose-evaluation-card { width: 386px; padding: 10px; spacing: 6px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
-.pingoose-evaluation-card StLabel { max-width: 386px; }
+.pingoose-evaluation-scroll { width: 436px; max-height: 240px; }
+.pingoose-evaluation-card { width: 392px; padding: 10px; spacing: 6px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
+.pingoose-evaluation-card StLabel { max-width: 392px; }
 
-.pingoose-visit-intra { margin: 0 24px 0 0; padding: 8px 12px; border-radius: 10px; background-color: rgba(127,127,127,0.16); font-weight: bold; }
+.pingoose-visit-intra { margin: 0; padding: 8px 10px; border-radius: 10px; background-color: rgba(127,127,127,0.16); font-weight: bold; }
 .pingoose-visit-intra:hover, .pingoose-visit-intra:focus { background-color: rgba(127,127,127,0.30); }
 
 .pingoose-feedback-button { padding: 8px; border-radius: 6px; background-color: rgba(127,127,127,0.15); }
-.pingoose-feedback-button StLabel { width: 366px; max-width: 366px; text-align: center; }
+.pingoose-feedback-button StLabel { width: 372px; max-width: 372px; text-align: center; }
 .pingoose-feedback-button:hover { background-color: rgba(127,127,127,0.3); }
 
 .pingoose-visit-intra StLabel { text-align: center; }
 
-.pingoose-overview-item { padding-left: 12px; padding-right: 12px; }
+.pingoose-overview-item { padding-left: 24px; padding-right: 24px; }
 
 .pingoose-visit-row { padding-top: 0; padding-bottom: 4px; }
 .pingoose-overview-item { padding-top: 4px; padding-bottom: 4px; }
 
 .pingoose-evaluation-title { font-size: 1.08em; font-weight: bold; color: #85d6cb; padding-bottom: 6px; }
 .pingoose-light .pingoose-evaluation-title { color: #16796b; }
-.pingoose-evaluation-person { spacing: 12px; padding: 6px 0; }
+.pingoose-evaluation-person { spacing: 14px; padding: 8px 4px; }
 .pingoose-person-details { spacing: 5px; }
 .pingoose-person-login { font-weight: bold; }
 .pingoose-person-seat, .pingoose-evaluation-time { color: #b8c2cc; font-size: 0.9em; }
@@ -108,3 +108,15 @@
 .pingoose-welcome-content { padding: 0 24px 16px; }
 .pingoose-login-button { width: 360px; padding: 12px 16px; margin: 0; border-radius: 10px; background-color: rgba(127,127,127,0.16); font-weight: bold; text-align: center; }
 .pingoose-login-button:hover, .pingoose-login-button:focus { background-color: rgba(127,127,127,0.3); }
+
+.pingoose-counterpart-avatar { border-radius: 10px; margin: 2px; }
+
+.pingoose-profile-header { spacing: 10px; }
+
+.pingoose-toolbar { padding: 2px 12px 0; spacing: 0; }
+.pingoose-list-container, .pingoose-scroll-container { padding-left: 24px; padding-right: 0; }
+
+.pingoose-profile-header { padding-right: 24px; }
+.pingoose-profile-login { font-size: 0.95em; }
+
+.pingoose-profile-container { padding-top: 0; }

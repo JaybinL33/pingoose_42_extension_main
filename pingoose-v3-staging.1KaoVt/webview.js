@@ -275,6 +275,12 @@ class Worker {
                 const profile = JSON.parse(view.run_javascript_in_world_finish(result).get_js_value().to_string());
                 if (profile.profileLogin && profile.profileLogin !== identity.login) { this.logout('account-error'); return; }
                 if (!profile.name && profile.level === null) { this.nextProfileRead = now() + 3; return; }
+                const coreReady = profile.name && profile.level !== null && profile.progress !== null && profile.points !== null;
+                if (Array.isArray(profile.projects) && !profile.projects.length) {
+                    if (!coreReady || this.view.is_loading) this.emptyProjectsSince = null;
+                    else if (!this.emptyProjectsSince) this.emptyProjectsSince = now();
+                    if (!this.emptyProjectsSince || now() - this.emptyProjectsSince < 6) profile.projects = null;
+                } else this.emptyProjectsSince = null;
                 emit({type: 'profile', login: identity.login, ...profile, avatar: undefined});
                 if (profile.avatar && profile.avatar !== this.avatarURL) this.loadAvatar(profile.avatar, identity);
                 const resource = this.avatarResources.get(profile.avatar);
@@ -821,7 +827,7 @@ class Worker {
         }
         else if (command === 'show') { this.window.show_all(); this.window.present(); }
         else if (command === 'hide') this.window.hide();
-        else if (command === 'test') emit({type: 'notification', id: `test:${GLib.get_monotonic_time()}`,
+        else if (command === 'test' && (TEST || Gio.File.new_for_path(GLib.build_filenamev([GLib.path_get_dirname(System.programPath), 'devOptions.js'])).query_exists(null))) emit({type: 'notification', id: `test:${GLib.get_monotonic_time()}`,
             test: true, body: 'This is a test notification for banners, cards and screen flash. Your evaluations are unchanged.'});
     }
 

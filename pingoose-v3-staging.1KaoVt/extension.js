@@ -1,5 +1,6 @@
 const {Clutter, Gio, GLib, GObject, Pango, St} = imports.gi;
 const Main = imports.ui.main;
+const MessageTray = imports.ui.messageTray;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
@@ -45,15 +46,23 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         box.add_child(this.count);
         this.add_child(box);
         const profileItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        profileItem.remove_all_children();
+        this.profileItem = profileItem;
+        profileItem.add_style_class_name('pingoose-overview-item');
+        profileItem.add_style_class_name('pingoose-profile-container');
         const profile = new St.BoxLayout({vertical: true, style_class: 'pingoose-profile'});
         const identity = new St.BoxLayout({style_class: 'pingoose-identity'});
-        this.avatar = new St.Bin({width: 56, height: 56, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-avatar'});
+        this.avatar = new St.Bin({width: 64, height: 64, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-avatar'});
         this.avatar.set_child(new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 40}));
         identity.add_child(this.avatar);
-        const names = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER});
+        const names = new St.BoxLayout({vertical: true, x_expand: true, y_align: Clutter.ActorAlign.CENTER});
+        this.profileHeader = new St.BoxLayout({x_expand: true, style_class: 'pingoose-profile-header'});
         this.profileName = new St.Label({text: 'Loading profile…', style_class: 'pingoose-profile-name'});
         this.profileLogin = new St.Label({text: '', style_class: 'pingoose-profile-login'});
-        names.add_child(this.profileName);
+        this.profileName.x_expand = true;
+        this.profileName.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+        this.profileHeader.add_child(this.profileName);
+        names.add_child(this.profileHeader);
 
         identity.add_child(names);
         profile.add_child(identity);
@@ -104,6 +113,7 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         this.menu.addMenuItem(profileItem);
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         const overviewItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        overviewItem.remove_all_children();
         const overview = new St.BoxLayout({style_class: 'pingoose-overview', x_expand: true});
         const projectsColumn = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column'});
         projectsColumn.add_child(new St.Label({text: 'My Projects', style_class: 'pingoose-heading'}));
@@ -132,17 +142,19 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         overviewItem.add_child(overview);
         this.menu.addMenuItem(overviewItem);
         const visitItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        visitItem.remove_all_children();
         // Use the same outer menu-item inset as the overview above.
         visitItem.add_style_class_name('pingoose-overview-item');
         visitItem.add_style_class_name('pingoose-visit-row');
         this.visitIntra = new St.Button({can_focus: true,
-            x_expand: true, style_class: 'pingoose-visit-intra'});
+            x_expand: true, x_align: Clutter.ActorAlign.FILL, style_class: 'pingoose-visit-intra'});
         this.visitIntra.set_child(new St.Label({text: 'Visit 42 Intra', x_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER}));
         visitItem.add_child(this.visitIntra);
         this.menu.addMenuItem(visitItem);
         this.refreshLogtimeTitle();
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.overviewSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this.overviewSeparator);
         // Keep worker diagnostics internal; the notifications area only shows cards.
         this.status = {label: {text: ''}};
         this.evaluations = new PopupMenu.PopupMenuSection();
@@ -150,7 +162,8 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         evaluationScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         evaluationScroll.add_actor(this.evaluations.actor);
         const evaluationItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        evaluationItem.set_style('padding-left: 12px; padding-right: 12px;');
+        evaluationItem.remove_all_children();
+        evaluationItem.add_style_class_name('pingoose-scroll-container');
         evaluationItem.add_child(evaluationScroll);
         this.evaluationItem = evaluationItem;
         this.menu.addMenuItem(evaluationItem);
@@ -161,6 +174,8 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         agendaScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         agendaScroll.add_actor(this.agenda.actor);
         this.agendaItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this.agendaItem.remove_all_children();
+        this.agendaItem.add_style_class_name('pingoose-scroll-container');
         this.agendaItem.add_child(agendaScroll);
         this.menu.addMenuItem(this.agendaItem);
         this.agendaSeparator = new PopupMenu.PopupSeparatorMenuItem();
@@ -170,6 +185,7 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         list.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         list.add_actor(this.cards.actor);
         const listItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        listItem.remove_all_children();
         listItem.add_style_class_name('pingoose-list-container');
         listItem.add_child(list);
         this.notificationItem = listItem;
@@ -205,8 +221,17 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
 
     updateProfile(data) {
         if (!this.profileLoadStarted) this.profileLoadStarted = GLib.get_monotonic_time();
+        const previous = this.lastProfile?.login === data.login ? this.lastProfile : {};
+        const merged = {...previous};
+        for (const [key, value] of Object.entries(data)) {
+            if (value !== null && value !== undefined && value !== '') merged[key] = value;
+        }
+        data = merged;
         this.lastProfile = data;
         this.checkProfileReady();
+        const renderKey = JSON.stringify([data, deadlineText(data.deadline)]);
+        if (renderKey === this.profileRenderKey) return;
+        this.profileRenderKey = renderKey;
         this.updateProjects(data);
         const number = (value, max) => Number.isFinite(value) && value >= 0 && value <= max ? value : null;
         const level = number(data.level, 1000);
@@ -283,6 +308,7 @@ class Pingoose {
         this._commands = [];
         this._writing = false;
         this._notifications = [];
+        this._unreadIds = new Set();
         this._agenda = [];
         this._evaluations = [];
         this._feedback = {};
@@ -290,7 +316,7 @@ class Pingoose {
         this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
         this._indicator.visitIntra.connect('clicked', () => this._send('show'));
-        releasePointerHighlight(this._indicator.menu.addAction('Send Test Notification', () => this._send('test')));
+
         const flashMenu = new PopupMenu.PopupSubMenuMenuItem('');
         const choices = [];
         for (let count = 0; count <= 5; count++) {
@@ -332,15 +358,19 @@ class Pingoose {
 
     _buildSettings() {
         const indicator = this._indicator;
+        const toolbar = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        toolbar.remove_all_children();
+        toolbar.add_style_class_name('pingoose-toolbar');
+        indicator.menu.addMenuItem(toolbar, 0);
         const mainItems = indicator.menu._getMenuItems();
         const settings = new PopupMenu.PopupMenuSection();
         indicator.menu.addMenuItem(settings);
-        const footer = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         const gear = new St.Button({style_class: 'pingoose-settings-button', can_focus: true,
-            x_expand: true, x_align: Clutter.ActorAlign.END, accessible_name: 'Settings'});
+            x_expand: false, x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.START, accessible_name: 'Settings'});
         gear.set_child(new St.Icon({icon_name: 'emblem-system-symbolic', icon_size: 18}));
-        footer.add_child(gear);
-        indicator.menu.addMenuItem(footer);
+        const toolbarSpace = new St.Widget({x_expand: true});
+        toolbar.add_child(toolbarSpace);
+        toolbar.add_child(gear);
         const welcome = new PopupMenu.PopupMenuSection();
         indicator.menu.addMenuItem(welcome);
         // A plain full-width container avoids menu-item ornament/indent columns.
@@ -362,7 +392,7 @@ class Pingoose {
             this._settingsVisible = visible;
             this._syncOptionalSections();
             settings.actor.visible = visible;
-            footer.actor.visible = !visible && !indicator.loginOnly;
+            gear.visible = !visible && !indicator.loginOnly;
         };
         const keepOpenAction = (label, action) => {
             const item = new PopupMenu.PopupMenuItem(label);
@@ -378,6 +408,8 @@ class Pingoose {
         const light = keepOpenAction('Light Mode', () => { this._settings.set_string('theme', 'light'); });
         settings.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         settings.addMenuItem(this._flashMenu);
+        const devFile = Gio.File.new_for_path(`${Me.path}/devOptions.js`);
+        if (devFile.query_exists(null)) Me.imports.devOptions.addOptions(settings, () => this._send('test'));
         settings.addAction('Logout Intra', () => { this._send('logout'); showSettings(false); });
         const sync = () => {
             const theme = this._settings.get_string('theme');
@@ -392,6 +424,7 @@ class Pingoose {
         indicator.menu.connect('open-state-changed', (_menu, open) => {
             if (open) {
                 this._flashMenu.menu.close(); showSettings(false);
+                this._unreadIds.clear();
                 for (const notification of this._notifications) notification.unread = false;
                 this._updatePanelLabel();
             }
@@ -408,6 +441,7 @@ class Pingoose {
         this._feedback = {};
         this._renderEvaluations();
         indicator.lastProfile = null;
+        indicator.profileRenderKey = null;
         indicator.profileLoadStarted = 0;
         indicator.profileReady = indicator.avatarReady = indicator.studyReady = false;
         indicator.profileContent.hide();
@@ -428,6 +462,7 @@ class Pingoose {
         indicator.projects.removeAll();
         indicator.projects.addMenuItem(new PopupMenu.PopupMenuItem('Loading projects…', {reactive: false}));
         this._notifications = [];
+        this._unreadIds = new Set();
         indicator.setLoginOnly(true);
         this._renderCards();
     }
@@ -489,6 +524,10 @@ class Pingoose {
             const id = message.id;
             this._notifications = this._notifications.filter(item => item.id !== `intrapy:${id}` &&
                 !['seat', 'reminder', 'rescheduled'].some(prefix => item.id.startsWith(`${prefix}:${id}:`)));
+            for (const key of this._unreadIds || []) {
+                if (key === `intrapy:${id}` || ['seat', 'reminder', 'rescheduled'].some(prefix => key.startsWith(`${prefix}:${id}:`)))
+                    this._unreadIds.delete(key);
+            }
             delete this._feedback[id];
             this._renderCards();
             return;
@@ -549,16 +588,32 @@ class Pingoose {
             return;
         if (this._notifications.some(item => item.id === message.id))
             return;
+        this._unreadIds ||= new Set();
+        if (!this._indicator.menu.isOpen || this._settingsVisible) this._unreadIds.add(message.id);
         this._notifications.unshift({id: message.id, body: message.body,
             test: message.test === true, category: message.category,
             unread: !this._indicator.menu.isOpen || this._settingsVisible, time: GLib.DateTime.new_now_local().format('%H:%M')});
         this._notifications.length = Math.min(this._notifications.length, 5);
         this._renderCards();
-        // Keep evaluation details out of the notification banner/lock screen.
-        // The full text is visible only inside the user's panel popover.
-        Main.notify(message.test ? 'Pingoose · Test' : message.category === 'agenda' ? 'Pingoose · New Agenda Event' : 'Pingoose · New Evaluation',
-            'Open Pingoose in the top bar to view the details.');
+        this._showBanner(message);
         this._flashScreen();
+    }
+
+    _showBanner(message) {
+        if (!this._bannerSource) {
+            this._bannerSource = new MessageTray.Source('Pingoose', 'preferences-system-notifications-symbolic');
+            this._bannerSource.connect('destroy', () => { this._bannerSource = null; });
+            Main.messageTray.add(this._bannerSource);
+        }
+        const title = message.test ? 'Test notification' : message.category === 'agenda' ? 'New agenda event' :
+            message.id.startsWith('reminder:') ? 'Evaluation reminder' :
+            message.id.startsWith('seat:') ? 'Evaluation location' :
+            message.id.startsWith('rescheduled:') ? 'Evaluation rescheduled' : 'Evaluation matched';
+        const banner = new MessageTray.Notification(this._bannerSource, title,
+            'Open Pingoose to view details.');
+        banner.setTransient(true);
+        banner.connect('activated', () => this._indicator?.menu.open());
+        this._bannerSource.showNotification(banner);
     }
 
     _flashScreen(remaining = null) {
@@ -571,7 +626,7 @@ class Pingoose {
             return;
         const now = GLib.get_monotonic_time();
         // Coalesce bursts: never turn a stream of notifications into a strobe.
-        if (now - this._lastFlash < 3_000_000)
+        if (now - this._lastFlash < 1_000_000)
             return;
         this._lastFlash = now;
         this._flashActors = Main.layoutManager.monitors.map(monitor => new St.Widget({
@@ -582,16 +637,16 @@ class Pingoose {
         for (const frame of this._flashActors) {
             Main.uiGroup.add_child(frame);
             frame.ease({
-                opacity: 200, duration: 180, mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                opacity: 160, duration: 120, mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onComplete: () => frame.ease({
-                    opacity: 0, duration: 720, mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    opacity: 0, duration: 380, mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => {
                         this._flashActors = this._flashActors.filter(actor => actor !== frame);
                         frame.destroy();
                         // Wait for every monitor; only one repeat timer may exist.
                         if (!this._flashActors.length && count > 1) {
                             const delay = Math.max(1, Math.ceil(
-                                (3_000_000 - (GLib.get_monotonic_time() - this._lastFlash)) / 1000));
+                                (1_000_000 - (GLib.get_monotonic_time() - this._lastFlash)) / 1000));
                             this._flashTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
                                 this._flashTimer = 0;
                                 this._flashScreen(count - 1);
@@ -628,13 +683,15 @@ class Pingoose {
         if (!rows.length) return;
         // A plain label avoids PopupMenuItem's reserved ornament/indent column.
         const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        title.remove_all_children();
         title.set_style('padding-left: 0; padding-right: 0;');
         title.add_child(new St.Label({text: 'Evaluation Info', style_class: 'pingoose-heading'}));
         section.addMenuItem(title);
         for (const row of rows) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-            item.set_style('padding: 6px 24px 6px 0;');
-            const box = new St.BoxLayout({vertical: true, style_class: 'pingoose-evaluation-card'});
+            item.remove_all_children();
+            item.set_style('padding: 6px 0; spacing: 0;');
+            const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
             const label = (text, style_class = '') => {
                 const actor = new St.Label({text, style_class});
                 actor.clutter_text.line_wrap = true;
@@ -644,11 +701,14 @@ class Pingoose {
             label(`${row.project || 'Evaluation'}: ${['evaluator', 'corrector'].includes(row.kind) ? 'Evaluator' : 'Evaluatee'}`, 'pingoose-evaluation-title');
             for (const login of row.users?.length ? row.users : [null]) {
                 const person = new St.BoxLayout({style_class: 'pingoose-evaluation-person'});
-                const avatar = new St.Bin({width: 44, height: 44, style_class: 'pingoose-avatar', y_align: Clutter.ActorAlign.CENTER});
+                const avatar = new St.Bin({width: 44, height: 44, style_class: 'pingoose-avatar pingoose-counterpart-avatar', y_align: Clutter.ActorAlign.CENTER});
                 let image = new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 34});
                 if (login && row.avatars?.includes(login) && /^[a-zA-Z0-9_-]{1,64}$/.test(login)) {
                     const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', `counterpart-${login}`]));
-                    if (file.query_exists(null)) image = new St.Icon({gicon: new Gio.FileIcon({file}), icon_size: 44});
+                    if (file.query_exists(null)) {
+                        avatar.set_style(`background-image: url("${file.get_uri()}"); background-size: cover;`);
+                        image = null;
+                    }
                 }
                 avatar.set_child(image);
                 person.add_child(avatar);
@@ -697,13 +757,15 @@ class Pingoose {
         section.removeAll();
         if (!this._agenda?.length) return;
         const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        title.remove_all_children();
         title.set_style('padding-left: 0;');
         title.add_child(new St.Label({text: 'Agenda', style_class: 'pingoose-heading'}));
         section.addMenuItem(title);
         for (const row of this._agenda) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-            item.set_style('padding: 6px 20px 6px 0;');
-            const box = new St.BoxLayout({vertical: true, style_class: 'pingoose-evaluation-card'});
+            item.remove_all_children();
+            item.set_style('padding: 6px 0; spacing: 0;');
+            const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
             for (const text of [row.name, `${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`, row.location,
                 row.feedback ? 'Feedback pending' : ''].filter(Boolean)) {
                 const label = new St.Label({text});
@@ -722,9 +784,10 @@ class Pingoose {
         if (indicator.loginOnly) { indicator.count.text = 'Login Required'; return; }
         const feedback = (this._evaluations || []).filter(row => Date.parse(row.begin) <= Date.now()).length +
             (this._agenda || []).filter(row => row.feedback).length;
-        const unread = (this._notifications || []).filter(row => row.unread).length;
-        if (feedback) indicator.count.text = `Feedback ${feedback}`;
-        else if (unread) indicator.count.text = `New ${unread}`;
+        const unread = this._unreadIds?.size ?? (this._notifications || []).filter(row => row.unread).length;
+        const badge = count => count > 5 ? '5+' : String(count);
+        if (feedback) indicator.count.text = `Feedback ${badge(feedback)}`;
+        else if (unread) indicator.count.text = `New ${badge(unread)}`;
         else if (indicator.profileReady) indicator.count.text = '42';
     }
 
@@ -735,11 +798,12 @@ class Pingoose {
         const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length;
         const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length;
         indicator.agendaItem.actor.visible = agendaVisible;
-        indicator.agendaSeparator.actor.visible = agendaVisible;
+        indicator.agendaSeparator.actor.visible = agendaVisible && notificationsVisible;
         indicator.evaluationItem.actor.visible = evaluationsVisible;
-        indicator.evaluationSeparator.actor.visible = evaluationsVisible;
+        indicator.evaluationSeparator.actor.visible = evaluationsVisible && (agendaVisible || notificationsVisible);
         indicator.notificationItem.actor.visible = notificationsVisible;
-        indicator.notificationSeparator.actor.visible = notificationsVisible;
+        indicator.notificationSeparator.actor.visible = false;
+        if (indicator.overviewSeparator) indicator.overviewSeparator.actor.visible = evaluationsVisible || agendaVisible || notificationsVisible;
     }
 
     _renderCards() {
@@ -752,11 +816,13 @@ class Pingoose {
         if (!this._notifications.length) return;
         for (const notification of this._notifications) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+            item.remove_all_children();
             item.add_style_class_name('pingoose-card-row');
             const card = new St.BoxLayout({vertical: true, reactive: true, x_expand: false, x_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-card'});
             const dismiss = new St.Button({label: '×', accessible_name: 'Dismiss notification',
                 can_focus: true, style_class: 'pingoose-dismiss', y_align: Clutter.ActorAlign.CENTER});
             dismiss.connect('clicked', () => {
+                this._unreadIds?.delete(notification.id);
                 this._notifications = this._notifications.filter(entry => entry.id !== notification.id);
                 this._renderCards();
             });
@@ -773,10 +839,13 @@ class Pingoose {
             indicator.cards.addMenuItem(item);
         }
         const footer = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        const clear = new St.Button({label: 'Clear Notifications', can_focus: true,
+        footer.remove_all_children();
+        footer.set_style('padding: 6px 16px 6px 0; spacing: 0;');
+        const clear = new St.Button({label: 'Clear All', can_focus: true,
             x_expand: true, x_align: Clutter.ActorAlign.END, style_class: 'pingoose-clear-button'});
         clear.connect('clicked', () => {
             this._notifications = [];
+            this._unreadIds = new Set();
             this._renderCards();
         });
         footer.add_child(clear);
@@ -784,6 +853,8 @@ class Pingoose {
     }
 
     disable() {
+        this._bannerSource?.destroy();
+        this._bannerSource = null;
         if (this._evaluationClock) GLib.source_remove(this._evaluationClock);
         this._evaluationClock = 0;
         if (this._themeChanged) this._settings.disconnect(this._themeChanged);
@@ -808,6 +879,7 @@ class Pingoose {
         this._indicator?.destroy();
         this._indicator = null;
         this._notifications = [];
+        this._unreadIds = new Set();
     }
 }
 
