@@ -21,7 +21,7 @@ function deadlineText(deadline, today = new Date()) {
     const get = type => Number(parts.find(part => part.type === type).value);
     const current = Date.UTC(get('year'), get('month') - 1, get('day'));
     const remaining = Math.round((target - current) / 86400000);
-    const suffix = remaining < 0 ? `${-remaining} Days Overdue` : `${remaining} Days Remain`;
+    const suffix = remaining < 0 ? `${-remaining} days overdue` : `${remaining} days remain`;
     return `${year}. ${month}. ${day}. (${suffix})`;
 }
 
@@ -77,18 +77,64 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         this.profileDeadline = new St.Label({text: '—', style_class: 'pingoose-profile-deadline'});
         deadline.add_child(this.profileDeadline);
         profile.add_child(deadline);
+        this.profileContent = profile;
+        this.profileLoading = new St.Label({text: '◌ Loading profile…', style_class: 'pingoose-loading', x_expand: true});
+        profileItem.add_child(this.profileLoading);
         profileItem.add_child(profile);
+        profile.hide();
+        this.profileReady = false;
+        this.avatarReady = false;
+        this.studyReady = false;
+        let frame = 0;
+        this.loadingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+            const glyph = ['◐', '◓', '◑', '◒'][frame++ % 4];
+            if (!this.profileReady) {
+                this.profileLoading.text = `${glyph} Loading profile…`;
+                if (!this.loginOnly) this.count.text = glyph;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+        this.connect('destroy', () => {
+            if (this.loadingTimer) GLib.source_remove(this.loadingTimer);
+            this.loadingTimer = 0;
+        });
         this.menu.addMenuItem(profileItem);
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        const projectsTitle = new PopupMenu.PopupMenuItem('My Projects', {reactive: false});
-        projectsTitle.label.add_style_class_name('pingoose-heading');
-        this.menu.addMenuItem(projectsTitle);
+        const overviewItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const overview = new St.BoxLayout({style_class: 'pingoose-overview', x_expand: true});
+        const projectsColumn = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column'});
+        projectsColumn.add_child(new St.Label({text: 'My Projects', style_class: 'pingoose-heading'}));
         this.projects = new PopupMenu.PopupMenuSection();
         this.projects.addMenuItem(new PopupMenu.PopupMenuItem('Loading projects…', {reactive: false}));
-        this.menu.addMenuItem(this.projects);
+        const projectScroll = new St.ScrollView({style_class: 'pingoose-project-scroll', overlay_scrollbars: false});
+        projectScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        projectScroll.add_actor(this.projects.actor);
+        projectsColumn.add_child(projectScroll);
+        overview.add_child(projectsColumn);
+        const study = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column pingoose-logtime-column'});
+        this.logtimeTitle = new St.Label({text: '', style_class: 'pingoose-heading'});
+        this.monthTime = new St.Label({text: '—', style_class: 'pingoose-study-value'});
+        this.todayTime = new St.Label({text: 'Today: —', style_class: 'pingoose-study-value'});
+        study.add_child(this.logtimeTitle);
+        study.add_child(this.monthTime);
+        study.add_child(this.todayTime);
+        overview.add_child(study);
+        overviewItem.add_child(overview);
+        this.menu.addMenuItem(overviewItem);
+        this.refreshLogtimeTitle();
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         // Keep worker diagnostics internal; the notifications area only shows cards.
         this.status = {label: {text: ''}};
+        this.evaluations = new PopupMenu.PopupMenuSection();
+        const evaluationScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll', overlay_scrollbars: false});
+        evaluationScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        evaluationScroll.add_actor(this.evaluations.actor);
+        const evaluationItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        evaluationItem.add_child(evaluationScroll);
+        this.evaluationItem = evaluationItem;
+        this.menu.addMenuItem(evaluationItem);
+        this.evaluationSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this.evaluationSeparator);
         this.cards = new PopupMenu.PopupMenuSection();
         const list = new St.ScrollView({style_class: 'pingoose-list', overlay_scrollbars: false, x_expand: true});
         list.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -96,16 +142,38 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         const listItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         listItem.add_style_class_name('pingoose-list-container');
         listItem.add_child(list);
+        this.notificationItem = listItem;
         this.menu.addMenuItem(listItem);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.notificationSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this.notificationSeparator);
         this.menu.connect('open-state-changed', (_menu, open) => {
+            if (open) this.refreshLogtimeTitle();
             if (open && this.lastProfile) this.updateProfile(this.lastProfile);
         });
         this.setLoginOnly(true);
     }
 
+    checkProfileReady() {
+        const data = this.lastProfile;
+        if (!data || this.profileReady) return;
+        const ready = data.name && Number.isFinite(data.level) && Number.isFinite(data.progress) &&
+            Number.isFinite(data.points) && Number.isFinite(data.pace) && data.deadline &&
+            Array.isArray(data.projects) && this.avatarReady && this.studyReady;
+        if (!ready) return;
+        this.profileReady = true;
+        this.profileLoading.hide();
+        this.profileContent.show();
+        this.count.text = '42';
+    }
+
+    refreshLogtimeTitle() {
+        const month = new Intl.DateTimeFormat('en-US', {month: 'short'}).format(new Date());
+        this.logtimeTitle.text = `Logtime: ${month}`;
+    }
+
     updateProfile(data) {
         this.lastProfile = data;
+        this.checkProfileReady();
         this.updateProjects(data);
         const number = (value, max) => Number.isFinite(value) && value >= 0 && value <= max ? value : null;
         const level = number(data.level, 1000);
@@ -118,7 +186,7 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         this.profilePoints.text = `Ev.P ${number(data.points, 1000000) ?? '—'}`;
         this.profilePace.text = `Pace ${number(data.pace, 1000) ?? '—'} ·`;
         this.profileDeadline.text = deadlineText(data.deadline);
-        if (number(data.pace, 1000) === 24)
+        if (number(data.pace, 1000) === 24 && this.profileDeadline.text !== '—')
             this.profileDeadline.add_style_class_name('pingoose-deadline-danger');
         else
             this.profileDeadline.remove_style_class_name('pingoose-deadline-danger');
@@ -139,6 +207,7 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         }
         for (const project of projects) {
             const item = releasePointerHighlight(new PopupMenu.PopupMenuItem(project.name.slice(0, 80)));
+            item.add_style_class_name('pingoose-project-item');
             item.label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             item.connect('activate', () => {
                 const url = `https://projects.intra.42.fr/${project.slug}/${data.login}`;
@@ -184,6 +253,7 @@ class Pingoose {
         this._indicator.onLogin = () => this._send('login');
         Main.panel.addToStatusArea(Me.uuid, this._indicator);
         this._profileClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+            this._indicator?.refreshLogtimeTitle();
             if (this._indicator?.lastProfile) this._indicator.updateProfile(this._indicator.lastProfile);
             return GLib.SOURCE_CONTINUE;
         });
@@ -191,6 +261,10 @@ class Pingoose {
         this._commands = [];
         this._writing = false;
         this._notifications = [];
+        this._evaluations = [];
+        this._feedback = {};
+        this._renderEvaluations();
+        this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
         releasePointerHighlight(this._indicator.menu.addAction('Open Intra', () => this._send('show')));
         releasePointerHighlight(this._indicator.menu.addAction('Send Test Notification', () => this._send('test')));
@@ -246,6 +320,8 @@ class Pingoose {
         indicator.menu.addMenuItem(footer);
         const showSettings = visible => {
             for (const item of mainItems) item.actor.visible = !visible;
+            this._settingsVisible = visible;
+            this._syncOptionalSections();
             settings.actor.visible = visible;
             footer.actor.visible = !visible;
         };
@@ -259,8 +335,8 @@ class Pingoose {
         };
         keepOpenAction('‹ Back', () => showSettings(false));
         settings.addMenuItem(new PopupMenu.PopupMenuItem('Settings', {reactive: false}));
-        const dark = keepOpenAction('Dark Mode', () => { this._settings.set_string('theme', 'dark'); showSettings(false); });
-        const light = keepOpenAction('Light Mode', () => { this._settings.set_string('theme', 'light'); showSettings(false); });
+        const dark = keepOpenAction('Dark Mode', () => { this._settings.set_string('theme', 'dark'); });
+        const light = keepOpenAction('Light Mode', () => { this._settings.set_string('theme', 'light'); });
         settings.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         settings.addMenuItem(this._flashMenu);
         settings.addAction('Logout Intra', () => { this._send('logout'); showSettings(false); });
@@ -283,10 +359,18 @@ class Pingoose {
 
     _clearProfile() {
         const indicator = this._indicator;
+        this._evaluations = [];
+        this._feedback = {};
+        this._renderEvaluations();
         indicator.lastProfile = null;
+        indicator.profileReady = indicator.avatarReady = indicator.studyReady = false;
+        indicator.profileContent.hide();
+        indicator.profileLoading.show();
         indicator.projectsKey = null;
         indicator.profileName.text = 'Loading profile…';
         indicator.profileLogin.text = '';
+        indicator.monthTime.text = '—';
+        indicator.todayTime.text = 'Today: —';
         indicator.profileLevel.text = 'Lv.—';
         indicator.profilePercent.text = '(—%)';
         indicator.profileProgress.width = 0;
@@ -308,7 +392,7 @@ class Pingoose {
                 const [line] = stream.read_line_finish_utf8(result);
                 if (this._process !== proc || cancel.is_cancelled() || line === null)
                     return;
-                if (line.length <= 8192) {
+                if (line.length <= 131072) {
                     try { this._message(JSON.parse(line)); }
                     catch (_) {
                         if (this._indicator)
@@ -355,6 +439,22 @@ class Pingoose {
     _message(message) {
         if (!message || typeof message !== 'object')
             return;
+        if (message.type === 'evaluations' && Array.isArray(message.rows) && message.rows.length <= 100) {
+            this._evaluations = message.rows;
+            this._renderEvaluations();
+            return;
+        }
+        if (message.type === 'study-time') {
+            if (message.login !== GLib.get_user_name()) return;
+            const format = minutes => Number.isInteger(minutes) && minutes >= 0 && minutes <= 44640
+                ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '—';
+            this._indicator.refreshLogtimeTitle();
+            this._indicator.monthTime.text = format(message.monthMinutes);
+            this._indicator.todayTime.text = `Today: ${format(message.todayMinutes)}`;
+            this._indicator.studyReady = Number.isInteger(message.monthMinutes) && Number.isInteger(message.todayMinutes);
+            this._indicator.checkProfileReady();
+            return;
+        }
         if (message.type === 'signed-out') { this._clearProfile(); return; }
         if (['profile', 'profile-avatar'].includes(message.type)) {
             if (message.login !== GLib.get_user_name()) return;
@@ -362,6 +462,8 @@ class Pingoose {
             else {
                 const image = Gio.File.new_for_path(GLib.build_filenamev([
                     GLib.get_user_state_dir(), 'pingoose', 'profile-avatar']));
+                this._indicator.avatarReady = true;
+                this._indicator.checkProfileReady();
                 this._indicator.avatar.set_child(null);
                 this._indicator.avatar.set_style(`background-image: url("${image.get_uri()}"); background-size: cover;`);
             }
@@ -375,8 +477,9 @@ class Pingoose {
             }
             if (message.state === 'login-needed') this._indicator.setLoginOnly(true);
             else if (['authenticated', 'watching'].includes(message.state)) {
+                const wasLoginOnly = this._indicator.loginOnly;
                 this._indicator.setLoginOnly(false);
-                this._renderCards();
+                if (wasLoginOnly) this._renderCards();
             }
             this._indicator.status.label.text = message.state;
             return;
@@ -454,19 +557,88 @@ class Pingoose {
         }
     }
 
+    _renderEvaluations() {
+        const rows = this._evaluations || [];
+        this._syncOptionalSections();
+        const key = JSON.stringify([rows, this._feedback, rows.map(row => Date.parse(row.begin) <= Date.now())]);
+        if (key === this._evaluationKey) return;
+        this._evaluationKey = key;
+        const section = this._indicator.evaluations;
+        section.removeAll();
+        if (!rows.length) return;
+        // A plain label avoids PopupMenuItem's reserved ornament/indent column.
+        const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        title.set_style('padding-left: 0; padding-right: 0;');
+        title.add_child(new St.Label({text: 'Evaluation Info', style_class: 'pingoose-heading'}));
+        section.addMenuItem(title);
+        for (const row of rows) {
+            const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+            item.add_style_class_name('pingoose-empty');
+            const box = new St.BoxLayout({vertical: true, style_class: 'pingoose-evaluation-card'});
+            const label = text => {
+                const actor = new St.Label({text});
+                actor.clutter_text.line_wrap = true;
+                actor.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+                box.add_child(actor);
+            };
+            label(`${row.project || 'Evaluation'} · ${['evaluator', 'corrector'].includes(row.kind) ? 'Evaluator' : 'Evaluatee'}`);
+            label(new Date(row.begin).toLocaleString('en-GB'));
+            label(row.users?.length ? row.users.map(login => `${login} · Seat: ${row.seats?.[login] || 'Unavailable'}`).join('\n') : 'Someone · Seat: Unavailable');
+            const button = (text, action) => {
+                const control = new St.Button({label: text, can_focus: true, style_class: 'pingoose-clear-button'});
+                control.connect('clicked', action);
+                box.add_child(control);
+            };
+            const step = value => { this._feedback[row.id] = value; this._renderEvaluations(); };
+            if (Date.parse(row.begin) <= Date.now()) {
+                if (this._feedback[row.id] === 'confirm') {
+                    label('Have you submitted your evaluation feedback?');
+                    button('Yes', () => this._send(`feedback:${row.id}`));
+                    button('Not yet', () => step('later'));
+                } else if (this._feedback[row.id] === 'later') {
+                    button('Open Project', () => {
+                        const profile = this._indicator.lastProfile;
+                        const slug = row.slug || profile?.projects?.find(project => project.name.toLowerCase() === row.project.toLowerCase())?.slug;
+                        if (!slug || !profile?.login) { Main.notify('Pingoose', 'Project link unavailable. Open Intra to submit your feedback.'); return; }
+                        try { Gio.AppInfo.launch_default_for_uri(`https://projects.intra.42.fr/${encodeURIComponent(slug)}/${encodeURIComponent(profile.login)}`, global.create_app_launch_context(0, -1)); }
+                        catch (_) { Main.notify('Pingoose', 'Unable to open the project.'); }
+                    });
+                    button('Later', () => step(null));
+                } else button('Have you submitted your evaluation feedback?', () => step('confirm'));
+            }
+            item.add_child(box);
+            section.addMenuItem(item);
+        }
+    }
+
+    _syncOptionalSections() {
+        const indicator = this._indicator;
+        const evaluationsVisible = !this._settingsVisible && !!this._evaluations?.length;
+        const notificationsVisible = !this._settingsVisible && !!this._notifications?.length;
+        indicator.evaluationItem.actor.visible = evaluationsVisible;
+        indicator.evaluationSeparator.actor.visible = evaluationsVisible;
+        indicator.notificationItem.actor.visible = notificationsVisible;
+        indicator.notificationSeparator.actor.visible = notificationsVisible;
+    }
+
     _renderCards() {
+        this._syncOptionalSections();
         const indicator = this._indicator;
         indicator.cards.removeAll();
         indicator.count.text = indicator.loginOnly ? 'Intra Login' :
-            (this._notifications.length ? String(this._notifications.length) : '42');
-        if (!this._notifications.length) {
-            indicator.cards.addMenuItem(new PopupMenu.PopupMenuItem('No notifications.', {reactive: false}));
-            return;
-        }
+            (indicator.profileReady ? '42' : '◌');
+        if (!this._notifications.length) return;
         for (const notification of this._notifications) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
             item.add_style_class_name('pingoose-card-row');
-            const card = new St.BoxLayout({vertical: true, x_expand: true, style_class: 'pingoose-card'});
+            const card = new St.BoxLayout({vertical: true, reactive: true, x_expand: false, x_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-card'});
+            const dismiss = new St.Button({label: '×', accessible_name: 'Dismiss notification',
+                can_focus: true, style_class: 'pingoose-dismiss', y_align: Clutter.ActorAlign.CENTER});
+            dismiss.connect('clicked', () => {
+                this._notifications = this._notifications.filter(entry => entry.id !== notification.id);
+                this._renderCards();
+            });
+            item.add_child(dismiss);
             card.add_child(new St.Label({text: notification.test ? 'Test Notification' : '42 · New Evaluation',
                 style_class: 'pingoose-card-title'}));
             const body = new St.Label({text: notification.body, style_class: 'pingoose-card-body'});
@@ -490,6 +662,8 @@ class Pingoose {
     }
 
     disable() {
+        if (this._evaluationClock) GLib.source_remove(this._evaluationClock);
+        this._evaluationClock = 0;
         if (this._themeChanged) this._settings.disconnect(this._themeChanged);
         this._themeChanged = 0;
         if (this._profileClock) GLib.source_remove(this._profileClock);

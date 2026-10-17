@@ -1,16 +1,16 @@
 .pingoose-count { margin-left: 5px; font-size: 0.85em; }
-.pingoose-heading { font-weight: bold; }
+.pingoose-heading { font-weight: 800; font-size: 1.12em; }
 .pingoose-list { width: 456px; max-width: 456px; max-height: 400px; }
 .pingoose-status { color: #b8b8b8; max-width: 360px; }
 .pingoose-card {
-    width: 400px;
+    width: 326px;
     padding: 12px;
     spacing: 6px;
     border-radius: 10px;
     background-color: rgba(255, 255, 255, 0.07);
 }
 .pingoose-card-title { font-weight: bold; color: #85d6cb; }
-.pingoose-card-body { width: 400px; max-width: 400px; }
+.pingoose-card-body { width: 326px; max-width: 326px; }
 .pingoose-card-time { font-size: 0.8em; color: #b8b8b8; }
 .pingoose-flash {
     background-color: transparent;
@@ -54,9 +54,29 @@
 .pingoose-clear-button { padding: 6px 10px; border-radius: 6px; font-size: 0.85em; }
 .pingoose-clear-button:hover { background-color: rgba(127,127,127,0.2); }
 
-.pingoose-card-row { padding: 4px 12px 4px 0; }
+.pingoose-card-row { padding: 5px 28px 5px 0; }
 .pingoose-list StScrollBar { min-width: 8px; }
 
 .pingoose-dark .popup-menu-content, .pingoose-light .popup-menu-content { width: 500px; min-width: 500px; max-width: 500px; }
 .pingoose-study-row { spacing: 24px; padding: 6px 0; }
 .pingoose-study-value { font-weight: bold; }
+
+.pingoose-overview { spacing: 16px; }
+.pingoose-overview-column { width: 220px; spacing: 10px; }
+.pingoose-project-scroll { width: 220px; height: 116px; }
+.pingoose-project-item { padding: 7px 8px 7px 0; }
+.pingoose-project-item StLabel { max-width: 180px; }
+.pingoose-logtime-column { padding-left: 12px; border-left: 1px solid rgba(127,127,127,0.25); }
+.pingoose-project-scroll StScrollBar { min-width: 8px; }
+
+.pingoose-dismiss { width: 26px; height: 26px; border-radius: 13px; padding: 0; font-size: 18px; background-color: rgba(127,127,127,0.2); }
+.pingoose-dismiss:hover { background-color: #b83b48; color: white; }
+.pingoose-card-row { spacing: 10px; }
+.pingoose-loading { padding: 28px 0; text-align: center; color: #85d6cb; }
+.pingoose-light .pingoose-loading { color: #16796b; }
+
+.pingoose-dark .pingoose-heading { color: #ffffff; }
+.pingoose-empty { padding-left: 0; }
+.pingoose-evaluation-scroll { width: 456px; max-height: 240px; }
+.pingoose-evaluation-card { width: 410px; padding: 10px; spacing: 6px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
+.pingoose-evaluation-card StLabel { max-width: 410px; }

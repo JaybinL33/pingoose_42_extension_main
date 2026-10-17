@@ -24,7 +24,9 @@ function parseRows(data) {
     for (const row of data) {
         if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error('response-error');
         const id = identifier(row.id);
-        const begin = row.begin_at ?? row.beginAt;
+        const rawBegin = row.begin_at ?? row.beginAt;
+        // Match slim: the service also returns UTC timestamps without a suffix.
+        const begin = typeof rawBegin === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?$/.test(rawBegin) ? `${rawBegin}Z` : rawBegin;
         const project = row.project_name ?? row.projectName;
         const match = typeof begin === 'string' && begin.match(
             /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:\d{2})$/);
@@ -36,7 +38,16 @@ function parseRows(data) {
         if (calendar.getUTCFullYear() !== Number(match[1]) || calendar.getUTCMonth() + 1 !== Number(match[2]) ||
             calendar.getUTCDate() !== Number(match[3])) throw new Error('response-error');
         ids.add(id);
-        if (row.kind === 'evaluator') result.push({id, begin, project: project || ''});
+        if (['evaluator', 'evaluated', 'corrector', 'corrected', 'evaluatee'].includes(row.kind)) {
+            // The deployed Intra widget consumes `user` for either role.
+            const candidates = row.user ?? (row.kind === 'evaluator' || row.kind === 'corrector'
+                ? (row.correcteds || row.evaluated || []) : (row.corrector || row.evaluator || []));
+            const users = (Array.isArray(candidates) ? candidates : [candidates])
+                .map(user => typeof user === 'string' ? user : user?.login)
+                .filter(login => typeof login === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(login));
+            result.push({id, begin, project: project || '', kind: row.kind,
+                users: [...new Set(users)].slice(0, 10), slug: typeof row.project_slug === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(row.project_slug) ? row.project_slug : null});
+        }
     }
     return result;
 }
@@ -47,6 +58,24 @@ function storedState(text) {
         !/^[A-Za-z0-9_-]{1,128}$/.test(state.subject) || !Array.isArray(state.ids) ||
         state.ids.length > MAX_SEEN || state.ids.some(id => typeof id !== 'string' || identifier(id) !== id) ||
         new Set(state.ids).size !== state.ids.length) throw new Error('storage-error');
+    for (const field of ['dismissed', 'reminders']) {
+        if (state[field] === undefined) state[field] = [];
+        if (!Array.isArray(state[field]) || state[field].length > MAX_SEEN ||
+            state[field].some(value => typeof value !== 'string' || value.length > 512)) throw new Error('storage-error');
+    }
+    if (state.evaluations === undefined) state.evaluations = [];
+    if (!Array.isArray(state.evaluations) || state.evaluations.length > 100) throw new Error('storage-error');
+    state.evaluations = state.evaluations.map(row => {
+        const parsed = parseRows([{...row, begin_at: row.begin, project_name: row.project,
+            user: row.users, project_slug: row.slug}])[0];
+        if (!parsed) throw new Error('storage-error');
+        parsed.seats = {};
+        for (const login of parsed.users) {
+            const seat = row.seats?.[login];
+            if (typeof seat === 'string' && (seat === 'Unavailable' || /^c[0-9]+r[0-9]+s[0-9]+$/i.test(seat))) parsed.seats[login] = seat;
+        }
+        return parsed;
+    });
     return state;
 }
 
@@ -55,7 +84,7 @@ function advanceSeen(previous, subject, rows) {
     const old = baseline ? previous.ids : [];
     const seen = new Set(old);
     const ids = [...new Set([...rows.map(row => row.id), ...old])].slice(0, MAX_SEEN);
-    return {state: {version: 1, subject, ids}, added: baseline ? rows.filter(row => !seen.has(row.id)) : []};
+    return {state: {version: 1, subject, ids, evaluations: baseline ? (previous.evaluations || []) : [], dismissed: baseline ? (previous.dismissed || []) : [], reminders: baseline ? (previous.reminders || []) : []}, added: rows.filter(row => !seen.has(row.id))};
 }
 
 function retryAfter(value, now = Date.now()) {
@@ -74,7 +103,7 @@ function notification(row) {
     const when = `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
     const project = row.project.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
     return {type: 'notification', id: `intrapy:${row.id}`,
-        body: `Starts ${when}${project ? ` · ${project}` : ''}\nEvaluation ${row.id}`};
+        body: `You have been matched with someone.\n${row.kind === 'evaluator' || row.kind === 'corrector' ? 'Evaluator' : 'Evaluatee'} · ${when}${project ? ` · ${project}` : ''}`};
 }
 
 if (typeof module !== 'undefined')
