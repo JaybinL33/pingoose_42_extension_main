@@ -184,6 +184,8 @@ class Worker {
         this.view = new WebKit2.WebView({web_context: this.context});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
         this.window = new Gtk.Window({title: 'Loading…', default_width: 1000, default_height: 750});
+        this.window.set_wmclass('42intra', '42Intra');
+        this.window.set_icon_from_file(GLib.build_filenamev([GLib.path_get_dirname(System.programPath), '42intra.png']));
         const header = new Gtk.HeaderBar({title: 'Loading…', show_close_button: true});
         const syncPageTitle = () => {
             const title = (this.view.get_title() || '').trim() || 'Loading…';
@@ -457,13 +459,13 @@ class Worker {
             if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) return null;
             throw error;
         }
-        if (info.get_file_type() !== Gio.FileType.REGULAR || info.get_size() > 400000 ||
+        if (info.get_file_type() !== Gio.FileType.REGULAR || info.get_size() > 4194304 ||
             info.get_attribute_uint32('unix::uid') !== UID || (info.get_attribute_uint32('unix::mode') & 0o077))
             throw new Error('storage-error');
         const stream = this.stateFile.read(null);
         try {
-            const bytes = stream.read_bytes(400001, null).get_data();
-            if (bytes.length > 400000) throw new Error('storage-error');
+            const bytes = stream.read_bytes(4194305, null).get_data();
+            if (bytes.length > 4194304) throw new Error('storage-error');
             return Model.storedState(ByteArray.toString(bytes));
         } finally { stream.close(null); }
     }
@@ -485,7 +487,7 @@ class Worker {
             const retained = new Map(plan.state.evaluations.map(row => [row.id, row]));
             previousRows = new Map(retained);
             for (const row of rows) if (!plan.state.dismissed.includes(row.id)) retained.set(row.id, {...retained.get(row.id), ...row});
-            plan.state.evaluations = [...retained.values()].slice(-100);
+            plan.state.evaluations = [...retained.values()];
             this.evaluationState = plan.state;
             if (JSON.stringify(previous) !== JSON.stringify(plan.state)) this.writeState(plan.state);
         } catch (_) { this.fail('storage-error'); return false; }
@@ -750,6 +752,8 @@ class Worker {
         this.signedOut = true;
         this.clearingLogin = true;
         this.auth = null;
+        this.slotsService?.close();
+        this.slotsService = null;
         this.evaluationState = null;
         this.cleanupCounterpartImages();
         this.pending?.cancel();
@@ -795,6 +799,17 @@ class Worker {
     }
 
     command(command) {
+        if (command === 'slots:list' || command === 'slots:all' || command === 'slots:future' || /^slots:close:[0-9]+$/.test(command)) {
+            if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
+            this.slotsService ||= new imports.slotsService.SlotsService(this.context, allowedURI);
+            if (this.slotsService.busy) return;
+            const identity = this.auth;
+            const action = command === 'slots:list' ? 'list' : command === 'slots:all' ? 'all' : command === 'slots:future' ? 'future' : 'close';
+            this.slotsService.run(action, command.split(':')[2], result => {
+                if (!stopped && this.auth?.subject === identity.subject) emit({type: 'slots', ...result});
+            });
+            return;
+        }
         if (command.startsWith('feedback:')) {
             const id = command.slice(9);
             if (!this.auth || !this.evaluationState) return;
@@ -843,6 +858,7 @@ class Worker {
     }
 
     close() {
+        this.slotsService?.close();
         this.cancel.cancel();
         this.pending?.cancel();
         this.session.abort();
@@ -932,6 +948,21 @@ function selfTest() {
     });
 }
 
+GLib.set_prgname('42intra');
+GLib.set_application_name('42Intra');
+if (!TEST) {
+    // GNOME Shell matches this entry to the WebKit window's WM_CLASS.
+    try {
+        const applications = GLib.build_filenamev([GLib.get_user_data_dir(), 'applications']);
+        GLib.mkdir_with_parents(applications, 0o755);
+        const icon = GLib.build_filenamev([GLib.path_get_dirname(System.programPath), '42intra.png']);
+        const desktop = `[Desktop Entry]\nType=Application\nName=42Intra\nComment=42 Intra companion\nExec=gnome-extensions prefs pingoose@local\nIcon=${icon}\nStartupWMClass=42Intra\nNoDisplay=true\nTerminal=false\n`;
+        const file = Gio.File.new_for_path(`${applications}/pingoose.desktop`);
+        let previous = '';
+        try { previous = ByteArray.toString(file.load_contents(null)[1]); } catch (_) {}
+        if (previous !== desktop) file.replace_contents(ByteArray.fromString(desktop), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+    } catch (_) { /* Window name and icon still work when desktop registration is unavailable. */ }
+}
 Gtk.init(null);
 GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, 15, () => { stop(); return GLib.SOURCE_REMOVE; });
 GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, 2, () => { stop(); return GLib.SOURCE_REMOVE; });

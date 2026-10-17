@@ -1,0 +1,342 @@
+// Seat-to-seat chat: newline-delimited UTF-8 over TCP, compatible with chat.py.
+// Pure Gio (no Shell imports) so it can also be exercised from a plain gjs script.
+const {Gio, GLib} = imports.gi;
+const Signals = imports.signals;
+const ByteArray = imports.byteArray;
+
+var PORT = 9000;
+var DOMAIN = '42gyeongsan.kr';
+var SEAT = /^c[0-9]+r[0-9]+s[0-9]+$/i;
+const MAX_LINE = 4096;
+const MAX_CONNECTIONS = 16;
+const MAX_HISTORY = 200;
+const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
+
+// Conversation key for a host: "c2r3s4" for cluster seats, otherwise the host itself.
+function peerKey(host) {
+    host = host.toLowerCase().replace(/\.$/, '');
+    if (['localhost', '127.0.0.1', '::1'].includes(host)) return 'localhost';
+    const label = host.split('.')[0];
+    if (SEAT.test(label) && (host === label || host.endsWith(`.${DOMAIN}`))) return label;
+    return host;
+}
+
+// "c2r3s4" -> {key: 'c2r3s4', host: 'c2r3s4.42gyeongsan.kr'}; null when unusable.
+function normalizePeer(input) {
+    const host = String(input ?? '').trim().toLowerCase().replace(/\.$/, '');
+    if (!host || host.length > 253) return null;
+    if (SEAT.test(host)) return {key: host.toLowerCase(), host: `${host}.${DOMAIN}`};
+    if (!HOST.test(host) && !Gio.InetAddress.new_from_string(host)) return null;
+    const key = peerKey(host);
+    return {key, host: key === 'localhost' ? '127.0.0.1' : host};
+}
+
+function now() {
+    return GLib.DateTime.new_now_local().format('%H:%M');
+}
+
+var ChatService = class ChatService {
+    constructor(port = PORT, blocked = []) {
+        this.port = port;
+        this._blocked = new Set(blocked.map(key => String(key).toLowerCase()));
+        this.state = 'stopped';
+        this._peers = new Map();
+        this._cancel = new Gio.Cancellable();
+        this._connections = 0;
+        this._destroyed = false;
+    }
+
+    isBlocked(key) {
+        const seat = peerKey(key);
+        return [...this._blocked].some(rule => rule === seat ||
+            (/^c[0-9]+$/.test(rule) && seat.startsWith(`${rule}r`)) ||
+            (/^c[0-9]+r[0-9]+$/.test(rule) && seat.startsWith(`${rule}s`)));
+    }
+
+    setBlocked(keys) {
+        this._blocked = new Set(keys.map(key => String(key).toLowerCase()));
+        for (const peer of this.peers) if (this.isBlocked(peer.key)) this.close(peer.key);
+    }
+
+    start() {
+        this._stopService();
+        const service = new Gio.SocketService();
+        try {
+            service.add_inet_port(this.port, null);
+        } catch (_) {
+            service.close();
+            this._setState('port-busy');
+            return;
+        }
+        service.connect('incoming', (_service, connection) => {
+            this._accept(connection);
+            return true;
+        });
+        service.start();
+        this._service = service;
+        this._setState('listening');
+    }
+
+    get peers() {
+        return [...this._peers.values()].sort((a, b) => b.activity - a.activity);
+    }
+
+    get unread() {
+        let total = 0;
+        for (const peer of this._peers.values()) total += peer.unread;
+        return total;
+    }
+
+    peer(key) {
+        return this._peers.get(key) ?? null;
+    }
+
+    // Starts (or reuses) a conversation; returns its key, or null for bad input.
+    open(input) {
+        if (!SEAT.test(String(input ?? '').trim())) return null;
+        const target = normalizePeer(input);
+        if (!target || this.isBlocked(target.key)) return null;
+        const peer = this._peer(target.key, target.host);
+        if (!peer.connections.length && !peer.connecting) this._connect(peer);
+        this.emit('peer-changed', peer.key);
+        return peer.key;
+    }
+
+    send(key, text) {
+        const peer = this._peers.get(key);
+        text = String(text ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, MAX_LINE);
+        if (!peer || !text || this.isBlocked(peer.key)) return false;
+        peer.queue.push(text);
+        this._record(peer, 'out', text);
+        if (peer.connections.length) this._flush(peer);
+        else if (!peer.connecting) this._connect(peer);
+        return true;
+    }
+
+    markRead(key) {
+        const peer = this._peers.get(key);
+        if (!peer?.unread) return;
+        peer.unread = 0;
+        this.emit('peer-changed', key);
+    }
+
+    close(key) {
+        const peer = this._peers.get(key);
+        if (!peer) return;
+        this._peers.delete(key);
+        for (const conn of [...peer.connections]) this._drop(peer, conn);
+        this.emit('peer-changed', key);
+    }
+
+    destroy() {
+        this._destroyed = true;
+        this._cancel.cancel();
+        for (const peer of this._peers.values()) {
+            for (const conn of peer.connections) this._closeStream(conn);
+        }
+        this._peers.clear();
+        this._stopService();
+        this.disconnectAll();
+    }
+
+    _stopService() {
+        if (!this._service) return;
+        this._service.stop();
+        this._service.close();
+        this._service = null;
+    }
+
+    _setState(state) {
+        this.state = state;
+        this.emit('server-state', state);
+    }
+
+    _peer(key, host) {
+        let peer = this._peers.get(key);
+        if (!peer) {
+            peer = {key, host, connections: [], queue: [], writing: false, connecting: false,
+                history: [], unread: 0, activity: Date.now()};
+            this._peers.set(key, peer);
+        } else if (host && !peer.host) {
+            peer.host = host;
+        }
+        return peer;
+    }
+
+    _alive(peer) {
+        return !this._destroyed && this._peers.get(peer.key) === peer;
+    }
+
+    _record(peer, dir, text) {
+        if (!this._alive(peer) || this.isBlocked(peer.key)) return;
+        const entry = {dir, text, time: now()};
+        peer.history.push(entry);
+        if (peer.history.length > MAX_HISTORY) peer.history.splice(0, peer.history.length - MAX_HISTORY);
+        peer.activity = Date.now();
+        if (dir === 'in') peer.unread++;
+        this.emit('message', peer.key, entry);
+    }
+
+    _connect(peer) {
+        if (!peer.host || this._connections >= MAX_CONNECTIONS) return;
+        peer.connecting = true;
+        this.emit('peer-changed', peer.key);
+        const client = new Gio.SocketClient({timeout: 5});
+        client.connect_to_host_async(peer.host, this.port, this._cancel, (_client, result) => {
+            let conn = null, error = null;
+            try { conn = client.connect_to_host_finish(result); } catch (e) { error = e; }
+            if (this._destroyed) {
+                if (conn) this._closeStream(conn);
+                return;
+            }
+            peer.connecting = false;
+            if (!this._alive(peer)) {
+                if (conn) this._closeStream(conn);
+                return;
+            }
+            if (!conn) {
+                const lost = peer.queue.length;
+                peer.queue = [];
+                this._record(peer, 'sys', `Connection failed: ${error?.message ?? 'unknown'}${lost ? ` (${lost} messages not sent)` : ''}`);
+                this.emit('peer-changed', peer.key);
+                return;
+            }
+            this._connections++;
+            this._record(peer, 'sys', `Connected to ${peer.host}`);
+            this._attach(peer, conn);
+        });
+    }
+
+    _accept(conn) {
+        if (this._connections >= MAX_CONNECTIONS) {
+            this._closeStream(conn);
+            return;
+        }
+        this._connections++;
+        let address;
+        try { address = conn.get_remote_address().get_address(); } catch (_) {
+            this._connections--;
+            this._closeStream(conn);
+            return;
+        }
+        const ip = address.to_string();
+        const admit = name => {
+            if (this._destroyed || this.isBlocked(name ?? ip)) {
+                this._connections--;
+                this._closeStream(conn);
+                return;
+            }
+            const peer = this._peer(peerKey(name ?? ip), name ?? ip);
+            this._record(peer, 'sys', `Connection from ${name ?? ip}`);
+            this._attach(peer, conn);
+        };
+        if (address.get_is_loopback()) {
+            admit('localhost');
+            return;
+        }
+        // Only cluster hosts (or the private network they sit on) may open a chat.
+        Gio.Resolver.get_default().lookup_by_address_async(address, this._cancel, (resolver, result) => {
+            let name = null;
+            try { name = resolver.lookup_by_address_finish(result).toLowerCase().replace(/\.$/, ''); } catch (_) { /* No PTR. */ }
+            if (this._destroyed) {
+                this._closeStream(conn);
+                return;
+            }
+            if (name?.endsWith(`.${DOMAIN}`)) admit(name);
+            else if (address.get_is_site_local()) {
+                // A missing PTR must not bypass a seat block: compare forward DNS addresses.
+                const seats = [...this._blocked].filter(key => SEAT.test(key));
+                let pending = seats.length;
+                let blocked = this._blocked.has(ip) || [...this._blocked].some(rule => /^c[0-9]+(?:r[0-9]+)?$/.test(rule));
+                const finish = () => {
+                    if (blocked || this._destroyed) { this._connections--; this._closeStream(conn); }
+                    else admit(null);
+                };
+                if (!pending) finish();
+                for (const seat of seats) {
+                    resolver.lookup_by_name_async(`${seat}.${DOMAIN}`, this._cancel, (dns, lookup) => {
+                        try {
+                            const addresses = dns.lookup_by_name_finish(lookup);
+                            if (this._blocked.has(seat) && addresses.some(value => value.equal(address))) blocked = true;
+                        } catch (_) {
+                            // Cannot safely identify the sender while a blocked seat is unresolved.
+                            if (this._blocked.has(seat)) blocked = true;
+                        }
+                        if (--pending === 0) finish();
+                    });
+                }
+            }
+            else {
+                this._connections--;
+                this._closeStream(conn);
+            }
+        });
+    }
+
+    _attach(peer, conn) {
+        peer.connections.push(conn);
+        const input = new Gio.DataInputStream({base_stream: conn.get_input_stream(), close_base_stream: false});
+        this._read(peer, conn, input);
+        this.emit('peer-changed', peer.key);
+        this._flush(peer);
+    }
+
+    _read(peer, conn, input) {
+        input.read_line_async(GLib.PRIORITY_DEFAULT, this._cancel, (stream, result) => {
+            let line = null, skip = false;
+            try {
+                [line] = stream.read_line_finish_utf8(result);
+            } catch (e) {
+                // Invalid UTF-8 consumes only that line; anything else ends the connection.
+                skip = e.matches?.(GLib.convert_error_quark(), GLib.ConvertError.ILLEGAL_SEQUENCE) ?? false;
+            }
+            if (this._destroyed) return;
+            if (line === null && !skip) {
+                this._drop(peer, conn);
+                return;
+            }
+            const text = (line ?? '').replace(/\r$/, '').slice(0, MAX_LINE);
+            if (text.trim() && this._alive(peer)) this._record(peer, 'in', text);
+            this._read(peer, conn, stream);
+        });
+    }
+
+    _flush(peer) {
+        if (peer.writing || !peer.queue.length || !peer.connections.length) return;
+        const conn = peer.connections[peer.connections.length - 1];
+        const text = peer.queue.shift();
+        peer.writing = true;
+        conn.get_output_stream().write_all_async(ByteArray.fromString(`${text}\n`), GLib.PRIORITY_DEFAULT,
+            this._cancel, (stream, result) => {
+                let ok = true;
+                try { stream.write_all_finish(result); } catch (_) { ok = false; }
+                if (this._destroyed) return;
+                peer.writing = false;
+                if (!ok) {
+                    this._record(peer, 'sys', `Send failed: ${text}`);
+                    this._drop(peer, conn);
+                }
+                this._flush(peer);
+            });
+    }
+
+    _drop(peer, conn) {
+        const index = peer.connections.indexOf(conn);
+        if (index < 0) return;
+        peer.connections.splice(index, 1);
+        this._connections--;
+        this._closeStream(conn);
+        if (!this._alive(peer)) return;
+        if (!peer.connections.length) {
+            this._record(peer, 'sys', 'Disconnected');
+            // Messages typed while the link died go out over a fresh connection.
+            if (peer.queue.length) this._connect(peer);
+        }
+        this.emit('peer-changed', peer.key);
+    }
+
+    _closeStream(conn) {
+        try { conn.close(null); } catch (_) { /* Already closed. */ }
+    }
+};
+Signals.addSignalMethods(ChatService.prototype);

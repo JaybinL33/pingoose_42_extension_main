@@ -64,7 +64,7 @@ function storedState(text) {
             state[field].some(value => typeof value !== 'string' || value.length > 512)) throw new Error('storage-error');
     }
     if (state.evaluations === undefined) state.evaluations = [];
-    if (!Array.isArray(state.evaluations) || state.evaluations.length > 100) throw new Error('storage-error');
+    if (!Array.isArray(state.evaluations) || state.evaluations.length > 10000) throw new Error('storage-error');
     state.evaluations = state.evaluations.map(row => {
         const parsed = parseRows([{...row, begin_at: row.begin, project_name: row.project,
             user: row.users, project_slug: row.slug}])[0];

@@ -41,19 +41,19 @@ console.log('PASS: new evaluation → notification → card; duplicate/restart/b
 
 assert.equal(model.parseRows([{...row, begin_at: '2026-10-20T09:45:00', user: 'peer'}])[0].begin, '2026-10-20T09:45:00Z');
 assert.deepEqual(model.parseRows([{...row, kind:'evaluated', user:'peer'}])[0].users, ['peer']);
-vm.runInContext('class EvaluationProbe {'+source.slice(source.indexOf('    _renderEvaluations()'),source.indexOf('    _renderCards()'))+'}; globalThis.EvaluationProbe=EvaluationProbe;',context);
+vm.runInContext('class EvaluationProbe {'+source.slice(source.indexOf('    _renderEvaluations('),source.indexOf('    _renderCards()'))+'}; globalThis.EvaluationProbe=EvaluationProbe;',context);
 const e=new context.EvaluationProbe();e._syncOptionalSections=()=>{};e._indicator={evaluations:new Section()};e._feedback={};e._send=command=>{e.sent=command;};
 e._evaluations=[{id:'42',project:'Codexion',kind:'evaluated',begin:new Date(Date.now()-1000).toISOString(),users:['peer']}];
 e._renderEvaluations();
-let box=e._indicator.evaluations.items[1].children[0];
+let box=e._indicator.evaluations.items[0].children[0];
 assert.equal(box.children.at(-1).label,'Have you submitted your evaluation feedback?');
-box.children.at(-1).clicked();box=e._indicator.evaluations.items[1].children[0];
-assert.equal(box.children.at(-2).label,'Yes');box.children.at(-1).clicked();
-box=e._indicator.evaluations.items[1].children[0];assert.equal(box.children.at(-2).label,'Open Project');
-box.children.at(-1).clicked();box=e._indicator.evaluations.items[1].children[0];box.children.at(-1).clicked();
-box=e._indicator.evaluations.items[1].children[0];box.children.at(-2).clicked();assert.equal(e.sent,'feedback:42');
+box.children.at(-1).clicked();box=e._indicator.evaluations.items[0].children[0];
+assert.equal(box.children.at(-1).children[0].label,'Yes');box.children.at(-1).children[1].clicked();
+box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.at(-1).children[0].label,'Open Project');
+box.children.at(-1).children[1].clicked();box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).clicked();
+box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).children[0].clicked();assert.equal(e.sent,'feedback:42');
 e._evaluations[0].begin=new Date(Date.now()+60000).toISOString();e._renderEvaluations();
-box=e._indicator.evaluations.items[1].children[0];assert.equal(box.children.length,3);
+box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.length,3);
 console.log('PASS: actual user field, UTC timestamp, Evaluation Info and feedback branches; no early dismissal button');
 vm.runInContext('class VisibilityProbe {'+source.slice(source.indexOf('    _syncOptionalSections()'),source.indexOf('    _renderCards()'))+'}; globalThis.VisibilityProbe=VisibilityProbe;',context);
 const visibility=new context.VisibilityProbe();visibility._updatePanelLabel=()=>{};
@@ -79,3 +79,42 @@ panel._agenda=Array.from({length:6},()=>({feedback:true}));panel._updatePanelLab
 panel._agenda.pop();panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'Feedback 5');
 assert.ok(p._unreadIds.size === 0);
 console.log('PASS: New/Feedback show 5 at five, 5+ above five; Clear All resets unread tracking');
+e._evaluations=[{id:'99',project:'Example',kind:'evaluator',begin:new Date(Date.now()-1000).toISOString(),users:[]}];e._feedback={};e.sent=null;
+e._renderEvaluations();box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.at(-1).label,'Has the evaluation ended?');
+box.children.at(-1).clicked();box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).children[1].clicked();
+assert.equal(e.sent,null);assert.equal(e._evaluations.length,1);box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.at(-1).label,'Has the evaluation ended?');
+box.children.at(-1).clicked();box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).children[0].clicked();assert.equal(e.sent,'feedback:99');
+console.log('PASS: evaluator asks about completion; Not yet retains card without project branch; Yes explicitly dismisses');
+
+let restoreScroll;
+context.Meta={LaterType:{BEFORE_REDRAW:0},later_add(type,fn){restoreScroll=fn;return 1;},later_remove(){restoreScroll=null;}};
+const adjustment={value:480,lower:0,upper:1200,page_size:420};
+e._indicator.evaluationScroll={grab_key_focus(){},get_vscroll_bar:()=>({get_adjustment:()=>adjustment})};
+const section=e._indicator.evaluations;
+section.removeAll=function(){this.items=[];adjustment.value=0;};
+e._feedback={};e._evaluationKey=null;e._renderEvaluations();restoreScroll();
+assert.equal(adjustment.value,480);
+box=section.items[0].children[0];box.children.at(-1).clicked();
+assert.equal(adjustment.value,480);assert.strictEqual(section.items[0],e._evaluationActors.get('99'));
+e._evaluations=[];e._renderEvaluations();adjustment.upper=420;restoreScroll();assert.equal(adjustment.value,0);
+console.log('PASS: feedback actions preserve scroll after layout; removing content clamps to valid scroll range');
+
+let evaluationStyle;
+visibility._indicator.evaluationScroll={set_style(style){evaluationStyle=style;}};
+visibility._settingsVisible=false;visibility._notifications=[{}];visibility._slotsExpanded=true;
+visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('190px'));
+visibility._slotsExpanded=false;visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('300px'));
+visibility._notifications=[];visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('360px'));
+context.ModalDialog={ModalDialog:class {
+ constructor(){this.contentLayout=new Actor();}
+ setButtons(buttons){this.buttons=buttons;}
+ open(){return true;}
+ destroy(){this.destroyed=true;}
+}};
+vm.runInContext('class LogoutProbe {'+source.slice(source.indexOf('    _confirmIntraLogout()'),source.indexOf('    _clearProfile()'))+'};globalThis.LogoutProbe=LogoutProbe;',context);
+const logout=new context.LogoutProbe();let logoutCommands=0;
+logout._indicator={menu:{close(){}}};logout._send=()=>logoutCommands++;
+logout._confirmIntraLogout();assert.equal(logoutCommands,0);
+logout._logoutDialog.buttons[0].action();assert.equal(logoutCommands,0);assert.equal(logout._logoutDialog,null);
+logout._confirmIntraLogout();logout._logoutDialog.buttons[1].action();assert.equal(logoutCommands,1);
+console.log('PASS: adaptive evaluation height; Intra logout requires explicit confirmation and Cancel sends no command');

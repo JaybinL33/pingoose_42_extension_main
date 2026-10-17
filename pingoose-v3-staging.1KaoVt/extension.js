@@ -1,6 +1,7 @@
-const {Clutter, Gio, GLib, GObject, Pango, St} = imports.gi;
+const {Clutter, Gio, GLib, GObject, Meta, Pango, St} = imports.gi;
 const Main = imports.ui.main;
 const MessageTray = imports.ui.messageTray;
+const ModalDialog = imports.ui.modalDialog;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
@@ -111,7 +112,8 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
             this.loadingTimer = 0;
         });
         this.menu.addMenuItem(profileItem);
-        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        this.profileSeparator = new PopupMenu.PopupSeparatorMenuItem();
+        this.menu.addMenuItem(this.profileSeparator);
         const overviewItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         overviewItem.remove_all_children();
         const overview = new St.BoxLayout({style_class: 'pingoose-overview', x_expand: true});
@@ -139,6 +141,9 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         study.add_child(studyRows.actor);
         overview.add_child(study);
         overviewItem.add_style_class_name('pingoose-overview-item');
+        this.overviewItem = overviewItem;
+        this.projectsColumn = projectsColumn;
+        this.studyColumn = study;
         overviewItem.add_child(overview);
         this.menu.addMenuItem(overviewItem);
         const visitItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
@@ -148,23 +153,38 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         visitItem.add_style_class_name('pingoose-visit-row');
         this.visitIntra = new St.Button({can_focus: true,
             x_expand: true, x_align: Clutter.ActorAlign.FILL, style_class: 'pingoose-visit-intra'});
-        this.visitIntra.set_child(new St.Label({text: 'Visit 42 Intra', x_expand: true,
+        this.visitIntra.set_child(new St.Label({text: 'Evaluation Slots ▾', x_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER}));
         visitItem.add_child(this.visitIntra);
         this.menu.addMenuItem(visitItem);
+        this.slotsButtonItem = visitItem;
+        this.slotItems = new PopupMenu.PopupMenuSection();
+        const slotScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-slot-scroll', overlay_scrollbars: false});
+        slotScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        slotScroll.add_actor(this.slotItems.actor);
+        this.slotsItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        this.slotsItem.remove_all_children();
+        this.slotsItem.add_style_class_name('pingoose-scroll-container');
+        this.slotsItem.add_child(slotScroll);
+        this.menu.addMenuItem(this.slotsItem);
+        this.slotsItem.hide();
         this.refreshLogtimeTitle();
         this.overviewSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this.overviewSeparator);
         // Keep worker diagnostics internal; the notifications area only shows cards.
         this.status = {label: {text: ''}};
         this.evaluations = new PopupMenu.PopupMenuSection();
-        const evaluationScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll', overlay_scrollbars: false});
+        const evaluationScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-evaluation-info-scroll', can_focus: true, overlay_scrollbars: false});
         evaluationScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         evaluationScroll.add_actor(this.evaluations.actor);
+        this.evaluationScroll = evaluationScroll;
         const evaluationItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         evaluationItem.remove_all_children();
         evaluationItem.add_style_class_name('pingoose-scroll-container');
-        evaluationItem.add_child(evaluationScroll);
+        const evaluationArea = new St.BoxLayout({vertical: true, x_expand: true});
+        evaluationArea.add_child(new St.Label({text: 'Evaluation Info', style_class: 'pingoose-heading pingoose-fixed-heading'}));
+        evaluationArea.add_child(evaluationScroll);
+        evaluationItem.add_child(evaluationArea);
         this.evaluationItem = evaluationItem;
         this.menu.addMenuItem(evaluationItem);
         this.evaluationSeparator = new PopupMenu.PopupSeparatorMenuItem();
@@ -187,7 +207,10 @@ const Indicator = GObject.registerClass(class PingooseIndicator extends PanelMen
         const listItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         listItem.remove_all_children();
         listItem.add_style_class_name('pingoose-list-container');
-        listItem.add_child(list);
+        const notificationArea = new St.BoxLayout({vertical: true, x_expand: true});
+        notificationArea.add_child(new St.Label({text: 'Notifications', style_class: 'pingoose-heading pingoose-fixed-heading'}));
+        notificationArea.add_child(list);
+        listItem.add_child(notificationArea);
         this.notificationItem = listItem;
         this.menu.addMenuItem(listItem);
         this.notificationSeparator = new PopupMenu.PopupSeparatorMenuItem();
@@ -315,28 +338,22 @@ class Pingoose {
         this._renderEvaluations();
         this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
-        this._indicator.visitIntra.connect('clicked', () => this._send('show'));
+        this._slotsExpanded = false;
+        this._slots = [];
+        this._indicator.visitIntra.connect('clicked', () => {
+            this._slotsExpanded = !this._slotsExpanded;
+            if (this._slotsExpanded) this._requestSlots('slots:list');
+            else this._renderSlots();
+        });
 
-        const flashMenu = new PopupMenu.PopupSubMenuMenuItem('');
-        const choices = [];
-        for (let count = 0; count <= 5; count++) {
-            const choice = new PopupMenu.PopupMenuItem(count ? `${count}` : 'Off');
-            choice.activate = () => this._settings.set_int('flash-count', count);
-            flashMenu.menu.addMenuItem(choice);
-            choices.push(choice);
-        }
-        const syncFlashCount = () => {
-            this._clearFlash();
-            const count = this._settings.get_int('flash-count');
-            flashMenu.label.text = `Screen Flash: ${count ? `${count}` : 'Off'}`;
-            choices.forEach((item, value) => item.setOrnament(
-                value === count ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE));
-        };
-        this._settingsChanged = this._settings.connect('changed::flash-count', syncFlashCount);
-        syncFlashCount();
-        this._flashMenu = flashMenu;
+        this._settingsChanged = this._settings.connect('changed::flash-count', () => this._clearFlash());
         this._renderCards();
+        this._chatPanel = new Me.imports.chatPanel.ChatPanel(this._indicator);
         this._buildSettings();
+        this._sessionHook = new Me.imports.systemSessionHook.SystemSessionHook(
+            (command, callback) => this._sessionSlotRequest(command, callback),
+            () => !!this._process && !this._indicator.loginOnly);
+        this._sessionHook.enable();
         try {
             this._process = Gio.Subprocess.new(['/usr/bin/gjs', `${Me.path}/webview.js`],
                 Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE);
@@ -363,11 +380,10 @@ class Pingoose {
         toolbar.add_style_class_name('pingoose-toolbar');
         indicator.menu.addMenuItem(toolbar, 0);
         const mainItems = indicator.menu._getMenuItems();
-        const settings = new PopupMenu.PopupMenuSection();
-        indicator.menu.addMenuItem(settings);
+
         const gear = new St.Button({style_class: 'pingoose-settings-button', can_focus: true,
-            x_expand: false, x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.START, accessible_name: 'Settings'});
-        gear.set_child(new St.Icon({icon_name: 'emblem-system-symbolic', icon_size: 18}));
+            x_expand: false, x_align: Clutter.ActorAlign.END, y_align: Clutter.ActorAlign.START, accessible_name: 'More options'});
+        gear.set_child(new St.Label({text: '⋮', style_class: 'pingoose-more-icon'}));
         const toolbarSpace = new St.Widget({x_expand: true});
         toolbar.add_child(toolbarSpace);
         toolbar.add_child(gear);
@@ -385,56 +401,85 @@ class Pingoose {
         loginButton.connect('clicked', () => { indicator.menu.close(); this._send('login'); });
         welcomeContent.add_child(loginButton);
         welcome.actor.add_child(welcomeContent);
-        const showSettings = visible => {
-            visible = visible && !indicator.loginOnly;
-            for (const item of mainItems) item.actor.visible = !visible && !indicator.loginOnly;
-            welcome.actor.visible = indicator.loginOnly;
-            this._settingsVisible = visible;
-            this._syncOptionalSections();
-            settings.actor.visible = visible;
-            gear.visible = !visible && !indicator.loginOnly;
-        };
-        const keepOpenAction = (label, action) => {
-            const item = new PopupMenu.PopupMenuItem(label);
-            // Normal PopupMenuItem activation closes the parent menu. These
-            // controls switch pages in place, including keyboard activation.
-            item.activate = () => action();
-            settings.addMenuItem(item);
-            return item;
-        };
-        keepOpenAction('‹ Back', () => showSettings(false));
-        settings.addMenuItem(new PopupMenu.PopupMenuItem('Settings', {reactive: false}));
-        const dark = keepOpenAction('Dark Mode', () => { this._settings.set_string('theme', 'dark'); });
-        const light = keepOpenAction('Light Mode', () => { this._settings.set_string('theme', 'light'); });
-        settings.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        settings.addMenuItem(this._flashMenu);
+        const settings = new PopupMenu.PopupMenu(gear, 1.0, St.Side.TOP);
+        Main.uiGroup.add_child(settings.actor);
+        settings.actor.hide();
+        this._optionsMenu = settings;
+        this._optionsManager = new PopupMenu.PopupMenuManager(indicator);
+        this._optionsManager.addMenu(settings);
+        settings.addAction('Visit 42 Intra', () => { indicator.menu.close(); this._send('show'); });
+        settings.addAction('Settings', () => {
+            indicator.menu.close();
+            imports.misc.extensionUtils.openPrefs();
+        });
         const devFile = Gio.File.new_for_path(`${Me.path}/devOptions.js`);
-        if (devFile.query_exists(null)) Me.imports.devOptions.addOptions(settings, () => this._send('test'));
-        settings.addAction('Logout Intra', () => { this._send('logout'); showSettings(false); });
+        if (devFile.query_exists(null)) Me.imports.devOptions.addOptions(settings, () => this._send('test'), row => {
+            this._evaluations = [...this._evaluations, row];
+            delete this._feedback[row.id];
+            this._renderEvaluations();
+            settings.close();
+        });
+        settings.addAction('Logout Intra', () => this._confirmIntraLogout());
+        const showMain = () => {
+            for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
+            welcome.actor.visible = indicator.loginOnly;
+            this._settingsVisible = false;
+            this._syncOptionalSections();
+        };
         const sync = () => {
             const theme = this._settings.get_string('theme');
             indicator.menu.actor.remove_style_class_name('pingoose-dark');
             indicator.menu.actor.remove_style_class_name('pingoose-light');
             indicator.menu.actor.add_style_class_name(`pingoose-${theme}`);
-            dark.setOrnament(theme === 'dark' ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE);
-            light.setOrnament(theme === 'light' ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NONE);
+
         };
-        this._themeChanged = this._settings.connect('changed::theme', sync);
+        this._themeChanged = this._settings.connect('changed', () => { sync(); showMain(); });
         sync();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
+            if (!open) settings.close();
             if (open) {
-                this._flashMenu.menu.close(); showSettings(false);
+                settings.close(); showMain();
                 this._unreadIds.clear();
                 for (const notification of this._notifications) notification.unread = false;
                 this._updatePanelLabel();
             }
         });
-        indicator.onLoginStateChanged = () => showSettings(false);
-        gear.connect('clicked', () => showSettings(true));
-        showSettings(false);
+        indicator.onLoginStateChanged = () => { settings.close(); showMain(); };
+        gear.connect('clicked', () => settings.toggle());
+        showMain();
+    }
+
+    _confirmIntraLogout() {
+        if (this._logoutDialog) return;
+        this._optionsMenu?.close();
+        this._indicator.menu.close();
+        const dialog = new ModalDialog.ModalDialog();
+        this._logoutDialog = dialog;
+        dialog.contentLayout.add_child(new St.Label({text: 'Log out of 42 Intra?',
+            style: 'font-weight: bold; font-size: 1.2em;'}));
+        dialog.contentLayout.add_child(new St.Label({text: 'You will need to log in again to view your Intra information.'}));
+        const finish = confirmed => {
+            this._logoutDialog = null;
+            dialog.destroy();
+            if (confirmed) {
+                this._chatPanel?.reset();
+                this._send('logout');
+            }
+        };
+        dialog.setButtons([
+            {label: 'Cancel', action: () => finish(false), key: Clutter.KEY_Escape, default: true},
+            {label: 'Log Out', action: () => finish(true)},
+        ]);
+        if (!dialog.open()) finish(false);
     }
 
     _clearProfile() {
+        this._chatPanel?.reset();
+        this._slots = [];
+        this._slotsExpanded = false;
+        this._slotsBusy = false;
+        this._slotsError = null;
+        this._renderSlots();
         const indicator = this._indicator;
         this._agenda = [];
         this._evaluations = [];
@@ -473,7 +518,7 @@ class Pingoose {
                 const [line] = stream.read_line_finish_utf8(result);
                 if (this._process !== proc || cancel.is_cancelled() || line === null)
                     return;
-                if (line.length <= 131072) {
+                if (line.length <= 4194304) {
                     try { this._message(JSON.parse(line)); }
                     catch (_) {
                         if (this._indicator)
@@ -520,6 +565,18 @@ class Pingoose {
     _message(message) {
         if (!message || typeof message !== 'object')
             return;
+        if (message.type === 'slots') {
+            const callback = this._sessionSlotsCallback;
+            this._sessionSlotsCallback = null;
+            if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
+            this._sessionSlotsTimer = 0;
+            this._slotsBusy = false;
+            if (Array.isArray(message.rows) && message.rows.length <= 1000) this._slots = message.rows;
+            this._slotsError = typeof message.error === 'string' ? message.error.slice(0, 200) : null;
+            this._renderSlots();
+            callback?.(message);
+            return;
+        }
         if (message.type === 'evaluation-dismissed' && typeof message.id === 'string') {
             const id = message.id;
             this._notifications = this._notifications.filter(item => item.id !== `intrapy:${id}` &&
@@ -537,8 +594,8 @@ class Pingoose {
             this._renderAgenda();
             return;
         }
-        if (message.type === 'evaluations' && Array.isArray(message.rows) && message.rows.length <= 100) {
-            this._evaluations = message.rows;
+        if (message.type === 'evaluations' && Array.isArray(message.rows) && message.rows.length <= 10000) {
+            this._evaluations = [...message.rows, ...this._evaluations.filter(row => row.devTest)];
             this._renderEvaluations();
             return;
         }
@@ -672,23 +729,39 @@ class Pingoose {
         }
     }
 
-    _renderEvaluations() {
+    _renderEvaluations(changedId = null) {
         const rows = this._evaluations || [];
         this._syncOptionalSections();
         const key = JSON.stringify([rows, this._feedback, rows.map(row => Date.parse(row.begin) <= Date.now())]);
         if (key === this._evaluationKey) return;
         this._evaluationKey = key;
         const section = this._indicator.evaluations;
-        section.removeAll();
+        const existing = changedId && this._evaluationActors?.get(changedId);
+        // Keep focus off the button being destroyed, without selecting the first menu item.
+        if (existing) this._indicator.evaluationScroll?.grab_key_focus();
+        const adjustment = this._indicator.evaluationScroll?.get_vscroll_bar().get_adjustment();
+        // Rebuilding actors resets the adjustment; restore after the new layout is allocated.
+        const scrollPosition = this._evaluationScrollPosition ?? adjustment?.value ?? 0;
+        if (this._evaluationScrollRestore) Meta.later_remove(this._evaluationScrollRestore);
+        this._evaluationScrollRestore = 0;
+        if (adjustment && !existing) {
+            this._evaluationScrollPosition = scrollPosition;
+            this._evaluationScrollRestore = Meta.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
+                this._evaluationScrollRestore = 0;
+                adjustment.value = Math.max(adjustment.lower,
+                    Math.min(scrollPosition, adjustment.upper - adjustment.page_size));
+                this._evaluationScrollPosition = null;
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+        if (!existing) {
+            section.removeAll();
+            this._evaluationActors = new Map();
+        }
         if (!rows.length) return;
-        // A plain label avoids PopupMenuItem's reserved ornament/indent column.
-        const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        title.remove_all_children();
-        title.set_style('padding-left: 0; padding-right: 0;');
-        title.add_child(new St.Label({text: 'Evaluation Info', style_class: 'pingoose-heading'}));
-        section.addMenuItem(title);
         for (const row of rows) {
-            const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+            if (existing && row.id !== changedId) continue;
+            const item = existing || new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
             item.remove_all_children();
             item.set_style('padding: 6px 0; spacing: 0;');
             const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
@@ -719,23 +792,39 @@ class Pingoose {
                 box.add_child(person);
             }
             label(`Starts · ${new Date(row.begin).toLocaleString('en-GB')}`, 'pingoose-evaluation-time');
+            let actionRow = box;
+            const paired = Date.parse(row.begin) <= Date.now() && ['confirm', 'later'].includes(this._feedback[row.id]);
             const button = (text, action) => {
-                const control = new St.Button({can_focus: true, x_expand: true, style_class: 'pingoose-feedback-button'});
-                const caption = new St.Label({text});
+                const control = new St.Button({can_focus: true, x_expand: true, style_class: paired ? 'pingoose-feedback-button pingoose-feedback-half' : 'pingoose-feedback-button'});
+                const caption = new St.Label({text, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
                 caption.clutter_text.line_wrap = true;
                 caption.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
                 caption.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
                 control.set_child(caption);
                 control.connect('clicked', action);
-                box.add_child(control);
+                actionRow.add_child(control);
             };
-            const step = value => { this._feedback[row.id] = value; this._renderEvaluations(); };
+            const evaluator = ['evaluator', 'corrector'].includes(row.kind);
+            const question = evaluator ? 'Has the evaluation ended?' : 'Have you submitted your evaluation feedback?';
+            const step = value => {
+                this._feedback[row.id] = value;
+                this._renderEvaluations(row.id);
+            };
             if (Date.parse(row.begin) <= Date.now()) {
                 if (this._feedback[row.id] === 'confirm') {
-                    label('Have you submitted your evaluation feedback?');
-                    button('Yes', () => this._send(`feedback:${row.id}`));
-                    button('Not yet', () => step('later'));
+                    label(question, 'pingoose-feedback-question');
+                    actionRow = new St.BoxLayout({style_class: 'pingoose-feedback-actions', x_expand: true});
+                    box.add_child(actionRow);
+                    button('Yes', () => {
+                        if (!row.devTest) { this._send(`feedback:${row.id}`); return; }
+                        this._evaluations = this._evaluations.filter(item => item !== row);
+                        delete this._feedback[row.id];
+                        this._renderEvaluations();
+                    });
+                    button('Not yet', () => step(evaluator ? null : 'later'));
                 } else if (this._feedback[row.id] === 'later') {
+                    actionRow = new St.BoxLayout({style_class: 'pingoose-feedback-actions', x_expand: true});
+                    box.add_child(actionRow);
                     button('Open Project', () => {
                         const profile = this._indicator.lastProfile;
                         const slug = row.slug || profile?.projects?.find(project => project.name.toLowerCase() === row.project.toLowerCase())?.slug;
@@ -744,11 +833,75 @@ class Pingoose {
                         catch (_) { Main.notify('Pingoose', 'Unable to open the project.'); }
                     });
                     button('Later', () => step(null));
-                } else button('Have you submitted your evaluation feedback?', () => step('confirm'));
+                } else button(question, () => step('confirm'));
             }
             item.add_child(box);
-            section.addMenuItem(item);
+            if (!existing) section.addMenuItem(item);
+            this._evaluationActors.set(row.id, item);
         }
+    }
+
+    _sessionSlotRequest(command, callback) {
+        // Reuse an in-flight list request rather than opening a second WebKit session.
+        this._sessionSlotsCallback = callback;
+        if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
+        this._sessionSlotsTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 65, () => {
+            this._sessionSlotsTimer = 0;
+            const pending = this._sessionSlotsCallback;
+            this._sessionSlotsCallback = null;
+            pending?.({error: 'Slot request timed out.'});
+            return GLib.SOURCE_REMOVE;
+        });
+        if (!this._slotsBusy) this._requestSlots(command);
+    }
+
+    _requestSlots(command) {
+        if (this._slotsBusy) return;
+        this._slotsBusy = true;
+        this._slotsError = null;
+        this._send(command);
+        this._renderSlots();
+    }
+
+    _renderSlots() {
+        this._syncOptionalSections();
+        const indicator = this._indicator;
+        indicator.visitIntra.get_child().text = this._slotsExpanded ? 'Evaluation Slots ▴' : 'Evaluation Slots ▾';
+        const section = indicator.slotItems;
+        section.removeAll();
+        const textRow = text => {
+            const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+            item.remove_all_children(); item.set_style('padding: 6px 24px 6px 0;');
+            const label = new St.Label({text, style_class: 'pingoose-slot-label'});
+            label.clutter_text.line_wrap = true;
+            item.add_child(label); section.addMenuItem(item);
+        };
+
+        if (this._slotsBusy) { textRow('Updating slots…'); return; }
+        if (this._slotsError) textRow(this._slotsError);
+        for (const slot of this._slots || []) {
+            const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+            item.remove_all_children(); item.set_style('padding: 6px 24px 6px 0; spacing: 8px;');
+            const format = value => new Date(value).toLocaleString('en-GB', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+            const label = new St.Label({text: `${format(slot.start)} – ${format(slot.end)}`, x_expand: true, style_class: 'pingoose-slot-label'});
+            label.clutter_text.line_wrap = true;
+            item.add_child(label);
+            const close = new St.Button({label: '×', can_focus: true, accessible_name: 'Close slot', style_class: 'pingoose-dismiss'});
+            close.connect('clicked', () => this._requestSlots(`slots:close:${slot.id}`));
+            item.add_child(close); section.addMenuItem(item);
+        }
+        if (!this._slots?.length && !this._slotsError) textRow('No open slots.');
+        const footer = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        footer.remove_all_children(); footer.set_style('padding: 6px 24px 6px 0;');
+        const refresh = new St.Button({label: 'Refresh', can_focus: true, style_class: 'pingoose-clear-button'});
+        refresh.connect('clicked', () => this._requestSlots('slots:list'));
+        footer.add_child(refresh);
+        if (this._slots?.length) {
+            const all = new St.Button({label: 'Close All Slots', can_focus: true, x_expand: true, x_align: Clutter.ActorAlign.END, style_class: 'pingoose-clear-button'});
+            all.connect('clicked', () => this._requestSlots('slots:all'));
+            footer.add_child(all);
+        }
+        section.addMenuItem(footer);
     }
 
     _renderAgenda() {
@@ -792,16 +945,33 @@ class Pingoose {
     }
 
     _syncOptionalSections() {
+        this._chatPanel?.sync();
         this._updatePanelLabel();
         const indicator = this._indicator;
-        const evaluationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._evaluations?.length;
-        const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length;
-        const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length;
+        if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly;
+        const enabled = key => this._settings ? this._settings.get_boolean(`show-${key}`) : true;
+        if (indicator.slotsButtonItem) indicator.slotsButtonItem.visible = !indicator.loginOnly && enabled('slots');
+        if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly && enabled('slots');
+        if (indicator.profileSeparator) indicator.profileSeparator.visible = !indicator.loginOnly && enabled('profile');
+        if (indicator.profileItem) indicator.profileItem.visible = !indicator.loginOnly && enabled('profile');
+        if (indicator.overviewItem) {
+            indicator.projectsColumn.visible = enabled('projects');
+            indicator.studyColumn.visible = enabled('logtime');
+            indicator.overviewItem.visible = !indicator.loginOnly && (enabled('projects') || enabled('logtime'));
+        }
+        const evaluationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._evaluations?.length && enabled('evaluations');
+        const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length && enabled('notifications');
+        const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length && enabled('agenda');
         indicator.agendaItem.actor.visible = agendaVisible;
         indicator.agendaSeparator.actor.visible = agendaVisible && notificationsVisible;
         indicator.evaluationItem.actor.visible = evaluationsVisible;
         indicator.evaluationSeparator.actor.visible = evaluationsVisible && (agendaVisible || notificationsVisible);
         indicator.notificationItem.actor.visible = notificationsVisible;
+        // Caps, not fixed heights: short lists occupy only their natural height.
+        // Preserve more room for notifications when the slot list is expanded.
+        const slotsVisible = !!this._slotsExpanded && !indicator.loginOnly && enabled('slots');
+        const evaluationMax = notificationsVisible ? (slotsVisible ? 190 : 300) : (slotsVisible ? 280 : 360);
+        indicator.evaluationScroll?.set_style(`min-height: 0; max-height: ${evaluationMax}px;`);
         indicator.notificationSeparator.actor.visible = false;
         if (indicator.overviewSeparator) indicator.overviewSeparator.actor.visible = evaluationsVisible || agendaVisible || notificationsVisible;
     }
@@ -853,6 +1023,21 @@ class Pingoose {
     }
 
     disable() {
+        this._chatPanel?.destroy();
+        this._chatPanel = null;
+        this._logoutDialog?.destroy();
+        this._logoutDialog = null;
+        if (this._evaluationScrollRestore) Meta.later_remove(this._evaluationScrollRestore);
+        this._evaluationScrollRestore = 0;
+        this._evaluationScrollPosition = null;
+        this._sessionHook?.disable();
+        this._sessionHook = null;
+        if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
+        this._sessionSlotsTimer = 0;
+        this._sessionSlotsCallback = null;
+        this._optionsMenu?.destroy();
+        this._optionsMenu = null;
+        this._optionsManager = null;
         this._bannerSource?.destroy();
         this._bannerSource = null;
         if (this._evaluationClock) GLib.source_remove(this._evaluationClock);

@@ -10,7 +10,17 @@
       <range min="0" max="5"/>
       <default>1</default>
       <summary>Number of screen-edge pulses per notification</summary>
-      <description>Zero disables the effect. Pulses start at least three seconds apart.</description>
+      <description>Zero disables the effect. Pulses start at least one second apart.</description>
     </key>
+    <key name="show-profile" type="b"><default>true</default><summary>Show profile on the main page</summary></key>
+    <key name="show-projects" type="b"><default>true</default><summary>Show projects on the main page</summary></key>
+    <key name="show-logtime" type="b"><default>true</default><summary>Show logtime on the main page</summary></key>
+    <key name="show-evaluations" type="b"><default>true</default><summary>Show evaluations on the main page</summary></key>
+    <key name="show-agenda" type="b"><default>true</default><summary>Show agenda on the main page</summary></key>
+    <key name="show-notifications" type="b"><default>true</default><summary>Show notifications on the main page</summary></key>
+    <key name="blocked-chat-seats" type="as"><default>[]</default><summary>Blocked cluster chat seats</summary></key>
+    <key name="chat-enabled" type="b"><default>true</default><summary>Enable cluster chat sending and receiving</summary></key>
+    <key name="show-chat" type="b"><default>true</default><summary>Show Cluster Chat button and panel</summary></key>
+    <key name="show-slots" type="b"><default>true</default><summary>Show Evaluation Slots</summary></key>
   </schema>
 </schemalist>

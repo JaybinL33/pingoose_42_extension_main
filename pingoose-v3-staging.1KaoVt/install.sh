@@ -7,7 +7,7 @@ test -x /usr/bin/gjs
 build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 # Only runtime sources: no API app credentials, browser profile, diagnostics or tests.
-gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=token_refresher.py --extra-source=devOptions.js .
+gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=slotsService.js --extra-source=systemSessionHook.js --extra-source=chat.js --extra-source=chatPanel.js --extra-source=42intra.png --extra-source=token_refresher.py --extra-source=devOptions.js .
 gnome-extensions install --force "$build/pingoose@local.shell-extension.zip"
 printf '\n%s\n' \
     'Pingoose v3 설치 완료. 기존 데스크톱 세션은 변경하지 않았습니다.' \

@@ -67,7 +67,7 @@ build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
-    gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=token_refresher.py --extra-source=devOptions.js .
+    gnome-extensions pack --force --out-dir="$build" --extra-source=webview.js --extra-source=evaluations.js --extra-source=slotsService.js --extra-source=systemSessionHook.js --extra-source=chat.js --extra-source=chatPanel.js --extra-source=42intra.png --extra-source=token_refresher.py --extra-source=devOptions.js .
 )
 # Install the locally built package directly; the GNOME CLI can fail copying
 # across the desktop's home/USB filesystem boundary after removing the old copy.
