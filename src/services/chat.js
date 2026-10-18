@@ -54,9 +54,30 @@ var ChatService = class ChatService {
     }
 
     configure(policy) {
+        const previous=this.policy;
         this.policy=policy;
+        this._evaluationChats ||= new Map();
+        const sessions=(policy.sessions || []).filter(session=>policy.active && session.expires>Date.now());
+        for(const [key,saved] of this._evaluationChats)
+            if(!sessions.some(session=>session.id===saved.id && session.login===saved.login))this._evaluationChats.delete(key);
         for(const peer of this.peers) {
-            if(peer.scope && !Policy.allowed(policy,peer.key,peer.scope))this.close(peer.key);
+            if(!peer.scope || Policy.allowed(policy,peer.key,peer.scope))continue;
+            const old=(previous.grants || []).find(grant=>grant.id===peer.scope && grant.seat===peer.key);
+            const session=old && sessions.find(item=>item.id===old.id && item.login===old.login);
+            const saved=session?{...session,seat:peer.key,history:[...peer.history],unread:peer.unread}:null;
+            this.close(peer.key);
+            if(saved)this._evaluationChats.set(saved.id+':'+saved.login,saved);
+        }
+        for(const [key,saved] of [...this._evaluationChats]){
+            const grant=policy.grants.find(item=>item.id===saved.id && item.login===saved.login);
+            if(!grant || this.isBlocked(grant.seat))continue;
+            // Do not replace a separate conversation already open on the destination seat.
+            const existing=this.peer(grant.seat);
+            if(existing && existing.scope!==grant.id)continue;
+            this._evaluationChats.delete(key);
+            const seat=this.open(grant.seat,grant.id);
+            const peer=seat && this.peer(seat);
+            if(peer){peer.history=[...saved.history,...peer.history].slice(-MAX_HISTORY);peer.unread=saved.unread;this.emit('peer-changed',seat);}
         }
     }
     canOpen(seat, scope) { return Policy.allowed(this.policy,seat,scope); }
@@ -175,6 +196,7 @@ var ChatService = class ChatService {
     close(key) {
         const peer = this._peers.get(key);
         if (!peer) return;
+        for(const [id,saved] of this._evaluationChats || [])if(saved.id===peer.scope)this._evaluationChats.delete(id);
         this._peers.delete(key);
         peer.connectCancel?.cancel();peer.connectCancel=null;peer.connecting=false;
         peer.history=[];peer.queue=[];peer.unread=0;
@@ -191,6 +213,7 @@ var ChatService = class ChatService {
         }
         for (const conn of [...this._streams.keys()]) this._closeStream(conn);
         this._peers.clear();
+        this._evaluationChats?.clear();
         this._stopService();
         this.disconnectAll();
     }

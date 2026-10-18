@@ -33,7 +33,14 @@ var ChatPanel = class ChatPanel {
         }
         const active=!this._indicator.loginOnly;
         const general=Flags.enabled(this._settings,'hidden-cluster-chat');
-        this._chat.configure({active,general,login:GLib.get_user_name(),grants:this._grants || []});
+        const selected=this._chat.peer(this._chatActive);
+        if(selected?.scope && selected.scope!=='general')this._selectedEvaluation=selected.scope;
+        if(!this._sessions?.some(session=>session.id===this._selectedEvaluation && session.expires>Date.now()))this._selectedEvaluation=null;
+        this._chat.configure({active,general,login:GLib.get_user_name(),grants:this._grants || [],sessions:this._sessions || []});
+        const moved=this._selectedEvaluation && this._chat.peers.find(peer=>peer.scope===this._selectedEvaluation);
+        if(moved && moved.key!==this._chatActive){
+            this._chatActive=moved.key;this._renderChat();
+        }
         if(active && this._chat.state==='stopped')this._chat.start();
         this._chatUi.item.visible=active && general;
         this._chatUi.add.visible=general;
@@ -42,7 +49,7 @@ var ChatPanel = class ChatPanel {
             this._chatActive=null;this._chatUi.entry.text='';this._renderChat();
             this._chatBannerSource?.destroy();this._chatBannerSource=null;
             this._updatePanelLabel();
-            if(!general)this._expanded=false;
+            if(!general && !this._selectedEvaluation)this._expanded=false;
         }
         this._chatUi.root.visible=active && this._expanded && (general || !!this._chatActive);
         this._indicator.syncPanelLayout?.();
@@ -50,6 +57,9 @@ var ChatPanel = class ChatPanel {
             this._chat.markRead(this._chatActive);
     }
     updateEvaluations(rows) {
+        this._sessions=rows.filter(row=>!row.missing && (!row.devTest || Flags.enabled(this._settings,'hidden-dev-options')))
+            .flatMap(row=>(row.users || []).map(login=>({id:String(row.id),login,expires:Date.parse(row.begin)})))
+            .filter(session=>session.expires>Date.now());
         this._grants=Policy.grantsFrom(rows.filter(row=>!row.devTest || Flags.enabled(this._settings,'hidden-dev-options')),Date.now(),GLib.get_user_name());
         const expired=this._chat.peers.some(peer=>peer.scope && peer.scope!=='general' &&
             !this._grants.some(grant=>grant.id===peer.scope && grant.seat===peer.key));
@@ -77,7 +87,7 @@ var ChatPanel = class ChatPanel {
         this._chatBannerSource?.destroy();
         this._chatBannerSource = null;
         this._expanded = false;
-        this._grants=[];
+        this._grants=[];this._sessions=[];this._selectedEvaluation=null;
         this._chatUi.entry.text = '';
         this._chatUi.peerEntry.text = '';
         this._chatUi.peerEntry.remove_style_class_name('pingoose-chat-entry-error');

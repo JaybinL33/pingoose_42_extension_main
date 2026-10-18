@@ -99,7 +99,7 @@ var Controller = class Controller {
             const timeLabel = label(`${prefix} ${this._evaluationRelativeTime(row.begin, now)}`, 'pingoose-evaluation-time');
             this._evaluationTimes.set(row.id, {actor:timeLabel, begin:row.begin, prefix});
             let actionRow = box;
-            const paired = Date.parse(row.begin) <= Date.now() && ['confirm', 'later'].includes(this._feedback[row.id]);
+            const paired = (row.missing && this._feedback[row.id]==='missing-confirm') || (Date.parse(row.begin) <= Date.now() && ['confirm', 'later'].includes(this._feedback[row.id]));
             const button = (text, action) => {
                 const control = new St.Button({can_focus: true, x_expand: true, style_class: paired ? 'pingoose-feedback-button pingoose-feedback-half' : 'pingoose-feedback-button'});
                 const caption = new St.Label({text, x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER});
@@ -117,7 +117,13 @@ var Controller = class Controller {
                 this._renderEvaluations(row.id);
             };
             if(row.missing){
-                button('Remove Evaluation',()=>this._send(`feedback:${row.id}`));
+                if(this._feedback[row.id]==='missing-confirm'){
+                    label('Is this evaluation really missing?', 'pingoose-feedback-question');
+                    actionRow=new St.BoxLayout({style_class:'pingoose-feedback-actions',x_expand:true});
+                    box.add_child(actionRow);
+                    button('Yes',()=>this._send(`feedback:${row.id}`));
+                    button('Later',()=>step(null));
+                }else button('Remove Evaluation',()=>step('missing-confirm'));
                 continue;
             }
             if (Date.parse(row.begin) <= Date.now()) {
