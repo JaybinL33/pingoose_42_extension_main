@@ -33,3 +33,17 @@ indicator.profileItem.visible=false;controller._applySectionOrder();
 assert.equal(indicator.profileSeparator.visible,false);
 const snapshot=[...box.children];controller._applySectionOrder();assert.deepEqual(box.children,snapshot);
 console.log('PASS: order normalization, grouped slots, fixed toolbar, hidden separators, stable repeated updates');
+
+// Exercise the real refresh entry point, not just the reorder helper.
+for(const name of names)indicator[name].actor=indicator[name];
+indicator.projectsColumn={};indicator.studyColumn={};
+controller._chatPanel.sync=()=>{};controller._servicePanel.sync=()=>{};
+controller._updatePanelLabel=()=>{};
+let layoutUpdates=0;controller._applyPanelLayout=()=>layoutUpdates++;
+controller._settings={get_strv:()=>['services','slots','profile'],get_boolean:()=>true};
+controller._syncOptionalSections();
+assert.equal(box.children[1],services,'refresh must apply saved order');
+assert.equal(box.children[2],indicator.slotsButtonItem);
+assert.equal(box.children[3],indicator.slotsItem);
+assert.equal(layoutUpdates,1,'refresh must also update panel spacing');
+console.log('PASS: main-page refresh invokes ordering and spacing updates');

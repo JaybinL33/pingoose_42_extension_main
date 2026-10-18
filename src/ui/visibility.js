@@ -81,6 +81,8 @@ var Controller = class Controller {
         indicator.evaluationScroll?.set_style(`min-height: 0; max-height: ${evaluationMax}px;`);
         indicator.notificationSeparator.actor.visible = false;
         if (indicator.overviewSeparator) indicator.overviewSeparator.actor.visible = evaluationsVisible || agendaVisible || notificationsVisible;
+        this._applySectionOrder();
+        this._applyPanelLayout();
     }
 
 };
