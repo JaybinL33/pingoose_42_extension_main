@@ -17,11 +17,12 @@ function build(settings) {
     code.connect('changed',()=>{
         if(!flags.unlock(settings,code.get_text()))return;
         code.set_text('');
-        unlockStatus.label='Hidden Options unlocked.';
+        const active=flags.unlocked(settings);
+        unlockStatus.label=active?'Hidden Options unlocked.':'Hidden Options disabled.';
         const dialog=new Gtk.MessageDialog({transient_for:box.get_root(),modal:true,
             message_type:Gtk.MessageType.INFO,buttons:Gtk.ButtonsType.OK,
-            text:'Hidden Options unlocked',
-            secondary_text:'Open the Hidden Options tab to enable advanced features.'});
+            text:active?'Hidden Options unlocked':'Hidden Options disabled',
+            secondary_text:active?'Open the Hidden Options tab to enable advanced features.':'Hidden Options and advanced features are now disabled.'});
         dialog.connect('response',()=>dialog.destroy());
         dialog.present();
     });

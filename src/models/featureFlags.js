@@ -4,11 +4,13 @@
 var HIDDEN_OPTIONS = false;
 var DEVELOPMENT_DEFAULTS = false;
 function unlocked(settings) {
-    return HIDDEN_OPTIONS || settings.get_boolean('hidden-options-unlocked');
+    return settings.get_user_value('hidden-options-unlocked') === null
+        ? HIDDEN_OPTIONS : settings.get_boolean('hidden-options-unlocked');
 }
 function unlock(settings, phrase) {
-    if (phrase.trim().toLowerCase() !== 'pingoose-hidden') return false;
-    settings.set_boolean('hidden-options-unlocked', true);
+    const command = phrase.trim().toLowerCase();
+    if (!['pingoose-hidden-on', 'pingoose-hidden-off'].includes(command)) return false;
+    settings.set_boolean('hidden-options-unlocked', command === 'pingoose-hidden-on');
     return true;
 }
 function enabled(settings, key) {
