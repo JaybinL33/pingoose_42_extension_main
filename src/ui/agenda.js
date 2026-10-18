@@ -19,7 +19,7 @@ var Controller = class Controller {
             const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
             {
                 const header=new St.BoxLayout({x_expand:true});
-                const title=new St.Label({text:row.name,x_expand:true});
+                const title=new St.Label({text:row.name,x_expand:true,style_class:'pingoose-evaluation-title'});
                 title.clutter_text.line_wrap=true;header.add_child(title);
                 const remove=new St.Button({label:'×',accessible_name:'Hide agenda',can_focus:true,
                     style_class:'pingoose-dismiss',x_align:Clutter.ActorAlign.END,y_align:Clutter.ActorAlign.CENTER});
