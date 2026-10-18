@@ -37,6 +37,10 @@ for(let id=124;id<130;id++)p._message(model.notification({...model.parseRows([ro
 assert.equal(p._notifications.length,5);
 const dismiss=p._indicator.cards.items[0].children[0];dismiss.clicked();assert.equal(p._notifications.length,4);
 const footer=p._indicator.cards.items.at(-1);footer.children[0].clicked();assert.equal(p._notifications.length,0);assert.equal(p._indicator.cards.items.length,0);
+const countBefore=banners;
+p._message(event);
+assert.equal(p._notifications.length,0,'cleared notification must not reappear');
+assert.equal(banners,countBefore,'cleared notification must not repeat its system banner');
 console.log('PASS: new evaluation → notification → card; duplicate/restart/baseline; malformed response; 5-card limit; individual and clear-all deletion');
 
 assert.equal(model.parseRows([{...row, begin_at: '2026-10-20T09:45:00', user: 'peer'}])[0].begin, '2026-10-20T09:45:00Z');

@@ -87,7 +87,7 @@ function advanceSeen(previous, subject, rows) {
     const old = baseline ? previous.ids : [];
     const seen = new Set(old);
     const ids = [...new Set([...rows.map(row => row.id), ...old])].slice(0, MAX_SEEN);
-    return {state: {version: 1, subject, ids, evaluations: baseline ? (previous.evaluations || []) : [], dismissed: baseline ? (previous.dismissed || []) : [], reminders: baseline ? (previous.reminders || []) : [], agendaIds: baseline ? (previous.agendaIds || []) : []}, added: rows.filter(row => !seen.has(row.id))};
+    return {state: {version: 1, subject, ids, evaluations: baseline ? (previous.evaluations || []) : [], dismissed: baseline ? (previous.dismissed || []) : [], reminders: baseline ? (previous.reminders || []) : [], agendaIds: baseline ? (previous.agendaIds || []) : []}, added: rows.filter(row => !seen.has(row.id) && !(baseline && previous.dismissed?.includes(row.id)))};
 }
 
 function parseAgenda(data, feedback = false) {

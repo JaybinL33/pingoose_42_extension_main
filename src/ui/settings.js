@@ -41,6 +41,11 @@ var Controller = class Controller {
         this._optionsManager = new PopupMenu.PopupMenuManager(indicator);
         this._optionsManager.addMenu(settings);
         settings.addAction('Visit 42 Intra', () => { indicator.menu.close(); this._send('show'); });
+        settings.addAction('Refresh', () => {
+            settings.close();
+            this._send('refresh');
+            if(!indicator.loginOnly)this._requestSlots('slots:list');
+        });
         settings.addAction('Settings', () => {
             indicator.menu.close();
             imports.misc.extensionUtils.openPrefs();
@@ -58,7 +63,6 @@ var Controller = class Controller {
             },this._settings);
         const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
         syncDev();
-        settings.addAction('Logout Intra', () => this._confirmIntraLogout());
         const showMain = () => {
             for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
             welcome.actor.visible = indicator.loginOnly;
@@ -67,6 +71,10 @@ var Controller = class Controller {
         };
         const sync = () => this._applyTheme();
         this._themeChanged = this._settings.connect('changed', (_settings, key) => {
+            if (key === 'logout-request') {
+                if(!this._resetting){this._chatPanel?.reset();this._send('logout');}
+                return;
+            }
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
             syncDev(); sync(); this._applyPanelLayout(); showMain();

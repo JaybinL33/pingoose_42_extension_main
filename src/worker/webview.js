@@ -475,17 +475,20 @@ class Worker {
             finished = true;
             view.destroy();
             if (stopped || this.auth !== identity) return;
-            const stored = this.evaluationState?.evaluations.find(item => item.id === row.id);
+            const stored = this.evaluationState?.evaluations.find(item => item.id === row.id && item.begin === row.begin);
             // Keep a confirmed pre-start seat through transient lookup failures.
             const cached=stored && Date.parse(stored.begin)>Date.now() &&
                 stored.chatConfirmedAt?.[login]>=Date.parse(stored.begin)-890000 ? stored.seats?.[login] : null;
             row.seats = {...row.seats, [login]: seat || cached || 'Unavailable'};
+            const seatNotice=`${row.id}:seat:${row.begin}:${login}:${seat}`;
+            const notify=seat && stored && !this.evaluationState.reminders.includes(seatNotice);
+            if(notify)this.evaluationState.reminders=[...this.evaluationState.reminders,seatNotice].slice(-2000);
             if (stored) {
                 stored.seats = {...stored.seats, ...row.seats};
                 if(seat)stored.chatConfirmedAt={...stored.chatConfirmedAt,[login]:Date.now()};
                 this.writeState(this.evaluationState); this.publishEvaluations();
             }
-            if (seat && stored) emit({type: 'notification', id: `seat:${row.id}:${login}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
+            if (notify) emit({type: 'notification', id: `seat:${row.id}:${login}:${seat}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
         };
         let attempts = 0;
         const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
@@ -699,7 +702,26 @@ class Worker {
         this.serviceWindows = new Set();
     }
 
+    refreshData() {
+        if(!this.auth || this.signedOut || this.clearingLogin)return;
+        const due=Math.max(now(),this.notBefore || 0);
+        this.nextPoll=due;
+        this.nextAgendaPoll=due;
+        this.nextLogtime=due;
+        this.nextProfileReload=due;
+        this.nextProfileRead=due+3;
+        // Retain displayed data until fresh responses arrive.
+        if(due>now())return;
+        this.nextProfileReload=now()+45;
+        this.avatarURL=null;
+        this.view.reload_bypass_cache();
+        if(!this.pending)this.poll();
+        this.pollAgenda();
+        this.refreshLogtime();
+    }
+
     command(command) {
+        if(command==='refresh'){this.refreshData();return;}
         if (command === 'slots:open-auto' || command === 'slots:open-5' || command === 'slots:open-30m') {
             if (!imports.models.featureFlags.enabled(this.featureSettings,'hidden-auto-slots')) { emit({type:'slots',error:'Automatic slot creation is disabled.'}); return; }
             if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }

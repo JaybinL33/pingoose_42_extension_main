@@ -10,6 +10,13 @@ function build(settings) {
     settings.bind('flash-count',flash,'value',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Screen flash (0 = Off)',flash);
     box.append(new Gtk.Separator());
+    const logout=new Gtk.Button({label:'Logout Intra'});
+    logout.connect('clicked',()=>Common.confirm(box,'Log out of 42 Intra?',
+        'You will need to log in again to view your Intra information.','Log Out',()=>{
+            settings.set_string('logout-request',GLib.uuid_string_random());
+            Gio.Settings.sync();
+        }));
+    box.append(logout);
     box.append(new Gtk.Label({label:'Restore defaults, delete all local extension data and log out of Intra.',xalign:0,wrap:true}));
     const reset = new Gtk.Button({label:'Reset All Data'}); box.append(reset);
     const status = new Gtk.Label({label:'',xalign:0,wrap:true}); box.append(status);

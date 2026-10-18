@@ -103,6 +103,7 @@ class Pingoose {
     }
 
     _clearProfile() {
+        this._receivedNotificationIds = new Set();
         this._projectPanel?.reset();
         this._chatPanel?.reset();
         this._slots = [];
@@ -287,8 +288,12 @@ class Pingoose {
             !message.body.trim() || message.body.length > 1000 ||
             typeof message.id !== 'string' || message.id.length > 1200)
             return;
-        if (this._notifications.some(item => item.id === message.id))
+        this._receivedNotificationIds ||= new Set();
+        if (this._receivedNotificationIds.has(message.id) || this._notifications.some(item => item.id === message.id))
             return;
+        this._receivedNotificationIds.add(message.id);
+        if(this._receivedNotificationIds.size>2000)
+            this._receivedNotificationIds.delete(this._receivedNotificationIds.values().next().value);
         this._unreadIds ||= new Set();
         if (!this._indicator.menu.isOpen || this._settingsVisible) this._unreadIds.add(message.id);
         this._notifications.unshift({id: message.id, body: message.body,
