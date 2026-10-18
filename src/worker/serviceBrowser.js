@@ -9,27 +9,10 @@ if (!site) throw new Error('Invalid service URL');
 const view = new WebKit2.WebView({web_context: context});
 view.get_settings().set_enable_write_console_messages_to_stdout(false);
 const win = new Gtk.Window({title: site.name, default_width: 1050, default_height: 760});
-win.set_wmclass('42intra', '42Intra');
+win.set_wmclass('pingoose-webview', 'PingooseWebView');
 win.set_icon_from_file(`${root}/assets/42intra.png`);
 const header = new Gtk.HeaderBar({title: site.name, show_close_button: true});
-if (project) {
-    const home = new Gtk.Button({label: 'Intra Home'});
-    home.connect('clicked', () => view.load_uri('https://profile-v3.intra.42.fr/'));
-    header.pack_start(home);
-} else {
-    const navigation = new Gtk.Box({spacing: 6});
-    const back = new Gtk.Button({label: 'Back', sensitive: false});
-    const forward = new Gtk.Button({label: 'Forward', sensitive: false});
-    back.connect('clicked', () => { if (view.can_go_back()) view.go_back(); });
-    forward.connect('clicked', () => { if (view.can_go_forward()) view.go_forward(); });
-    navigation.pack_start(back, false, false, 0);
-    navigation.pack_start(forward, false, false, 0);
-    header.pack_start(navigation);
-    view.get_back_forward_list().connect('changed', () => {
-        back.sensitive = view.can_go_back();
-        forward.sensitive = view.can_go_forward();
-    });
-}
+header.pack_start(imports.worker.navigation.create(view));
 win.set_titlebar(header);
 win.add(view);
 view.connect('notify::title', () => { const title=view.get_title() || site.name; win.title=title; header.title=title; });

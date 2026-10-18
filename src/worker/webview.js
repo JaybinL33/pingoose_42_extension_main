@@ -107,7 +107,7 @@ class Worker {
         this.view = new WebKit2.WebView({web_context: this.context});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
         this.window = new Gtk.Window({title: 'Loading…', default_width: 1000, default_height: 750});
-        this.window.set_wmclass('42intra', '42Intra');
+        this.window.set_wmclass('pingoose-webview', 'PingooseWebView');
         this.window.set_icon_from_file(GLib.build_filenamev([SOURCE_ROOT, 'assets', '42intra.png']));
         const header = new Gtk.HeaderBar({title: 'Loading…', show_close_button: true});
         const syncPageTitle = () => {
@@ -116,9 +116,10 @@ class Worker {
             header.set_title(title);
         };
         this.view.connect('notify::title', syncPageTitle);
-        const home = new Gtk.Button({label: 'Intra Home'});
-        home.connect('clicked', () => this.view.load_uri(HOME));
-        header.pack_start(home);
+        this.navigation = imports.worker.navigation.create(this.view);
+        this.navigation.set_no_show_all(true);
+        this.navigation.hide();
+        header.pack_start(this.navigation);
         this.window.set_titlebar(header);
         this.window.add(this.view);
         this.window.connect('delete-event', () => { this.window.hide(); return true; });
@@ -870,11 +871,12 @@ class Worker {
             this.signedOut = false;
             try { this.signedOutFile.delete(null); } catch (_) {}
             this.loginWindow = true;
+            this.navigation.hide();
             this.window.show_all();
             this.window.present();
             if (!this.view.is_loading) this.view.load_uri(HOME);
         }
-        else if (command === 'show') { this.window.show_all(); this.window.present(); }
+        else if (command === 'show') { this.navigation.show(); this.window.show_all(); this.window.present(); }
         else if (command === 'hide') this.window.hide();
 
     }
@@ -907,15 +909,15 @@ class Worker {
     }
 }
 
-GLib.set_prgname('42intra');
-GLib.set_application_name('42Intra');
+GLib.set_prgname('pingoose-webview');
+GLib.set_application_name('Pingoose WebView');
 {
     // GNOME Shell matches this entry to the WebKit window's WM_CLASS.
     try {
         const applications = GLib.build_filenamev([GLib.get_user_data_dir(), 'applications']);
         GLib.mkdir_with_parents(applications, 0o755);
         const icon = GLib.build_filenamev([SOURCE_ROOT, 'assets', '42intra.png']);
-        const desktop = `[Desktop Entry]\nType=Application\nName=42Intra\nComment=42 Intra companion\nExec=gnome-extensions prefs pingoose@local\nIcon=${icon}\nStartupWMClass=42Intra\nNoDisplay=true\nTerminal=false\n`;
+        const desktop = `[Desktop Entry]\nType=Application\nName=Pingoose WebView\nComment=Pingoose web browser\nExec=gnome-extensions prefs pingoose@local\nIcon=${icon}\nStartupWMClass=PingooseWebView\nNoDisplay=true\nTerminal=false\n`;
         const file = Gio.File.new_for_path(`${applications}/pingoose.desktop`);
         let previous = '';
         try { previous = ByteArray.toString(file.load_contents(null)[1]); } catch (_) {}

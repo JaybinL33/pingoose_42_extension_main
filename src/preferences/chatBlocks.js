@@ -1,4 +1,5 @@
 const {Gtk}=imports.gi;
+const Common=imports.misc.extensionUtils.getCurrentExtension().imports.preferences.common;
 function open(parent,settings) {
     const dialog=new Gtk.Dialog({title:'Chat Block List',transient_for:parent.get_root(),modal:true,default_width:400});
     dialog.add_button('Close',Gtk.ResponseType.CLOSE);
@@ -14,7 +15,7 @@ function open(parent,settings) {
     const list=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:8});
     const scroll=new Gtk.ScrolledWindow({min_content_height:180,max_content_height:320,propagate_natural_height:true,hscrollbar_policy:Gtk.PolicyType.NEVER});
     scroll.set_child(list);box.append(scroll);
-    const render=()=>{
+    const render = () => Common.preserveListScroll(scroll, list, () => {
         let child;while((child=list.get_first_child()))list.remove(child);
         const rules=settings.get_strv('blocked-chat-seats');
         if(!rules.length)list.append(new Gtk.Label({label:'No blocked seats.',xalign:0}));
@@ -25,7 +26,7 @@ function open(parent,settings) {
             remove.connect('clicked',()=>settings.set_strv('blocked-chat-seats',settings.get_strv('blocked-chat-seats').filter(value=>value!==rule)));
             row.append(remove);list.append(row);
         }
-    };
+    });
     const submit=()=>{
         const value=entry.get_text().trim().toLowerCase();
         if(!/^c[1-9][0-9]*(?:r[1-9][0-9]*(?:s[1-9][0-9]*)?)?$/.test(value) || value.length>32){

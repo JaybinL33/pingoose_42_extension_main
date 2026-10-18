@@ -1,6 +1,7 @@
 const {Gtk, Gio} = imports.gi;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Sites = Me.imports.models.serviceSites;
+const Common = Me.imports.preferences.common;
 function build(settings) {
     const box = new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12,
         margin_top:24,margin_bottom:24,margin_start:24,margin_end:24});
@@ -20,7 +21,7 @@ function build(settings) {
     const scroll=new Gtk.ScrolledWindow({vexpand:true,min_content_height:200});
     const list=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});scroll.set_child(list);box.append(scroll);
     const save = sites => settings.set_string('service-sites',JSON.stringify(sites));
-    const render = () => {
+    const render = () => Common.preserveListScroll(scroll, list, () => {
         let child;while((child=list.get_first_child())) list.remove(child);
         const sites=Sites.readSites(settings);
         sites.forEach((site,index)=>{
@@ -37,7 +38,7 @@ function build(settings) {
             remove.connect('clicked',()=>{save(Sites.readSites(settings).filter((_s,i)=>i!==index));render();});
             buttons.append(update);buttons.append(remove);row.append(buttons);list.append(row);
         });
-    };
+    });
     add.connect('clicked',()=>{
         const site=Sites.normalizeSite(name.get_text(),url.get_text());const sites=Sites.readSites(settings);
         if(!site || sites.length>=30){error.label='Enter a name and a valid HTTPS URL (maximum 30 websites).';return;}

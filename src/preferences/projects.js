@@ -14,7 +14,7 @@ function build(settings){
     const clear=new Gtk.Button({label:'Delete All'});actions.append(clear);
     const status=new Gtk.Label({label:'',xalign:0,wrap:true});root.append(status);
     const scroll=new Gtk.ScrolledWindow({vexpand:true,min_content_height:250});const list=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});scroll.set_child(list);root.append(scroll);
-    const render=()=>{
+    const render = () => Common.preserveListScroll(scroll, list, () => {
         let child;while((child=list.get_first_child()))list.remove(child);
         try{
             const notes=Notes.list();
@@ -31,7 +31,7 @@ function build(settings){
                 });card.append(remove);list.append(card);
             }
         }catch(_){list.append(new Gtk.Label({label:'Unable to read notes.',xalign:0}));}
-    };
+    });
     clear.connect('clicked',()=>Common.confirm(root,'Delete all notes and TODO lists?',
         'All saved project notes and TODO lists will be permanently deleted.','Delete All',()=>{
             try{Notes.clear();render();status.label='All notes and TODO lists deleted.';}catch(_){status.label='Unable to delete. Please retry.';}

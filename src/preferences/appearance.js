@@ -1,4 +1,5 @@
 const {Gtk, Gio} = imports.gi;
+const Common = imports.misc.extensionUtils.getCurrentExtension().imports.preferences.common;
 const Order = imports.misc.extensionUtils.getCurrentExtension().imports.models.appearance;
 function build(settings) {
     const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 12});
@@ -15,7 +16,9 @@ function build(settings) {
         const order = draft.filter(key=>rows.has(key));
         order.forEach((key, index) => {
             const item = rows.get(key);
-            list.reorder_child_after(item.row, index ? rows.get(order[index - 1]).row : null);
+            const previous = index ? rows.get(order[index - 1]).row : null;
+            if (item.row.get_prev_sibling() !== previous)
+                list.reorder_child_after(item.row, previous);
             item.number.label = `${index + 1}.`;
             item.up.sensitive = index > 0;
             item.down.sensitive = index < order.length - 1;
@@ -42,7 +45,7 @@ function build(settings) {
             const order = draft.filter(value=>value!=='chat'), index = order.indexOf(key), target = index + delta;
             if (target < 0 || target >= order.length) return;
             [order[index], order[target]] = [order[target], order[index]];
-            draft = Order.normalize(order); refresh();
+            draft = Order.normalize(order); Common.preserveListScroll(scroll, list, refresh);
         };
         up.connect('clicked', () => move(-1)); down.connect('clicked', () => move(1));
         row.append(up); row.append(down); list.append(row);
