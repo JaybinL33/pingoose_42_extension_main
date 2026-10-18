@@ -3,11 +3,8 @@
 set -euo pipefail
 package_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 
-dev_sources=()
-if [[ $# -eq 1 && "$1" == '--dev' ]]; then
-    dev_sources=(--extra-source=dev)
-elif [[ $# -gt 0 ]]; then
-    printf 'Usage: %s [--dev] (run in a GNOME desktop terminal without sudo)\nThe session will not restart automatically.\n' "$0"
+if [[ $# -gt 0 ]]; then
+    printf 'Usage: %s (run in a GNOME desktop terminal without sudo)\nThe session will not restart automatically.\n' "$0"
     [[ $# -eq 1 && ( "$1" == '--help' || "$1" == '-h' ) ]] && exit 0
     exit 1
 fi
@@ -69,7 +66,7 @@ build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
-    gnome-extensions pack --force --out-dir="$build" --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets "${dev_sources[@]}" .
+    gnome-extensions pack --force --out-dir="$build" --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets .
 )
 # Install the locally built package directly; the GNOME CLI can fail copying
 # across the desktop's home/USB filesystem boundary after removing the old copy.

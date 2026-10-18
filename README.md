@@ -12,13 +12,7 @@ Ubuntu GNOME 데스크톱 터미널에서 sudo 없이 실행합니다.
 
 GNOME Shell 42, GJS, GTK 3, WebKit2 4.0, Soup 2.4, Python 3 GI가 필요합니다. 현재 소스를 패키징해 사용자 확장 경로에 설치합니다. **세션을 자동으로 재시작하지 않습니다.** 설치 후 직접 Shell을 리로드하거나 재로그인하세요. 첫 설치에서는 GNOME Extensions에서 Pingoose를 활성화하세요.
 
-개발용 알림·평가 카드 생성 메뉴를 포함하려면:
-
-```sh
-./install.sh --dev
-```
-
-일반 설치와 배포 ZIP에는 개발용 UI와 테스트가 포함되지 않습니다.
+`main`은 개발용 옵션을 제외한 배포 버전입니다. 테스트 알림·더미 평가 생성 메뉴는 `dev` 브랜치에서 `./install.sh --dev`로 설치할 수 있습니다. `main`에서는 `--dev` 옵션을 지원하지 않습니다.
 
 ## 소스 구조
 
@@ -50,7 +44,6 @@ src/
   models/evaluations.js         평가·아젠다 데이터 정규화 및 상태 모델
   assets/42intra.png            웹뷰 앱 아이콘
   schemas/                     사용자 설정 스키마
-  dev/devOptions.js            개발용 알림·더미 평가 메뉴
   tests/                       회귀 검증 및 로컬 채팅 테스트
   scripts/package.sh           배포 ZIP 생성
 ```

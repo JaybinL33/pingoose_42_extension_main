@@ -45,14 +45,6 @@ var Controller = class Controller {
             indicator.menu.close();
             imports.misc.extensionUtils.openPrefs();
         });
-        if (Gio.File.new_for_path(`${Me.path}/dev/devOptions.js`).query_exists(null)) {
-            Me.imports.dev.devOptions.addOptions(settings, () => this._message({type: 'notification',
-                id: `test:${GLib.get_monotonic_time()}`, test: true, body: 'Test notification'}), row => {
-                this._evaluations = [...this._evaluations, row];
-                this._renderEvaluations();
-                settings.close();
-            });
-        }
         settings.addAction('Logout Intra', () => this._confirmIntraLogout());
         const showMain = () => {
             for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
