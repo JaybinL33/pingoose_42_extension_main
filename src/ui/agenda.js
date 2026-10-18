@@ -16,7 +16,7 @@ var Controller = class Controller {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
             item.remove_all_children();
             item.set_style('padding: 6px 0; spacing: 0;');
-            const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
+            const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card pingoose-agenda-card'});
             {
                 const header=new St.BoxLayout({x_expand:true});
                 const title=new St.Label({text:row.name,x_expand:true,style_class:'pingoose-evaluation-title'});

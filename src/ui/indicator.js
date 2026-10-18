@@ -186,7 +186,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.evaluationSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this.evaluationSeparator);
         this.agenda = new PopupMenu.PopupMenuSection();
-        const agendaScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll', overlay_scrollbars: false});
+        const agendaScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-agenda-scroll', overlay_scrollbars: false});
         agendaScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         agendaScroll.add_actor(this.agenda.actor);
         this.agendaItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
