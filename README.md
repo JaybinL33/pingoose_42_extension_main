@@ -152,3 +152,15 @@ Appearance의 섹션 순서는 ↑/↓로 편집한 뒤 Apply를 눌러 저장�
 Missing 카드의 Remove Evaluation은 확인 후 Yes로 삭제하고 Later로 보류합니다. 평가 전용 채팅은 같은 평가 ID와 상대 인트라닉에 한해 좌석이 바뀌어도 대화 기록을 새 연결로 이어갑니다. 좌석 미확인 중에는 송수신을 막고 기록만 메모리에 임시 보관하며, 시작 전 좌석 재확인 시 복원합니다. 평가 시작·매칭 소실·로그아웃·직접 Disconnect 시 해당 기록을 정리합니다. 연결 실패 시 무한 자동 재시도는 하지 않습니다.
 
 좌석 조회에 성공한 후에는 연속 두 번 미확인일 때만 Unavailable로 변경합니다. 그 전에는 마지막 좌석을 유지하며, 새 좌석 확인 성공 시 실패 횟수를 초기화합니다. 채팅 버튼은 유효한 좌석이 확인된 동안만 표시합니다.
+
+### 아젠다 확인과 복원
+
+아젠다 카드의 ⋮ → Delete에서 “Have you checked this agenda?”에 Yes를 선택하면 카드를 숨깁니다. No는 그대로 유지합니다. 삭제한 ID는 GSettings의 `dismissed-agenda-ids`에 저장되므로 일반 Refresh, 자동 갱신, 재로그인, 세션 재시작으로 복원되지 않습니다. 아젠다 하단에는 Refresh 버튼을 두지 않습니다.
+
+Settings → General → Agenda Reset에서 삭제 기록을 초기화하고 현재 서버 아젠다를 다시 요청합니다. 서버에서 이미 사라진 행사는 복원되지 않습니다. 테스트 아젠다는 삭제 시 원본도 제거하므로 Refresh나 Agenda Reset으로 복원되지 않습니다. 이는 로컬 카드 확인 처리이며 서버 구독 취소나 피드백 제출이 아닙니다.
+
+### 확장 제거와 로그인 데이터
+
+GNOME Shell 42의 확장 제거는 확장 설치 디렉터리와 업데이트 디렉터리만 지웁니다. Pingoose 웹뷰 쿠키는 기본 `~/.local/share/pingoose/cookies.sqlite`, 사이트 데이터는 같은 폴더의 `profile/`, 웹뷰 캐시는 `cache/`에 저장되어 확장 제거 후에도 남습니다. 카드·노트 등 `~/.local/state/pingoose/`와 GSettings도 자동 삭제되지 않습니다. XDG 환경변수를 지정했다면 해당 사용자 경로를 사용합니다.
+
+완전 삭제하려면 확장을 활성화한 상태에서 Settings → General → Reset All Data를 실행하고 완료를 확인한 뒤 GNOME Extensions에서 제거합니다. Reset All Data는 웹뷰 데이터를 지우고 프로세스 종료 후 확장 전용 XDG data/cache/state 파일 및 사용자 설정을 초기화합니다. 단순 비활성화·세션 재시작은 제거와 구별되지 않는 disable 동작을 거치므로 여기에 데이터 자동 삭제를 넣지 않습니다.

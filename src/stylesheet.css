@@ -262,5 +262,7 @@
 }
 .pingoose-main-panel { border-radius: 14px; }
 
-.pingoose-agenda-card { min-height: 120px; padding: 20px 10px; spacing: 18px; }
+.pingoose-agenda-card { padding: 20px 10px; spacing: 18px; }
 .pingoose-agenda-scroll { max-height: 280px; }
+
+.pingoose-agenda-question { color: #ffffff; font-weight: bold; }

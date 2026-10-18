@@ -94,6 +94,16 @@ var Controller = class Controller {
                 if(!this._resetting){this._chatPanel?.reset();this._send('logout');}
                 return;
             }
+            if (key === 'agenda-reset-request') {
+                if(!this._resetting){this._restoreAgenda();this._send('agenda:refresh');}
+                return;
+            }
+            if (key === 'dismissed-agenda-ids') {
+                this._dismissedAgendaIds=new Set(this._settings.get_strv(key));
+                this._agenda=(this._agendaAll || []).filter(row=>!this._dismissedAgendaIds.has(String(row.id)));
+                this._renderAgenda();
+                return;
+            }
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
             syncDev(); sync(); this._applyPanelLayout(); showMain();

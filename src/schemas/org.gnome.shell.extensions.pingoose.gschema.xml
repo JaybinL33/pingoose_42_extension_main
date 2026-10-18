@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
+    <key name="dismissed-agenda-ids" type="as"><default>[]</default><summary>Agenda cards acknowledged by the user</summary></key>
+    <key name="agenda-reset-request" type="s"><default>''</default><summary>Restore dismissed agenda cards</summary></key>
     <key name="reset-request" type="s"><default>''</default><summary>Pending full reset request</summary></key>
     <key name="reset-status" type="s"><default>''</default><summary>Full reset progress</summary></key>
     <key name="hidden-cluster-chat" type="b"><default>false</default><summary>Allow general cluster chat</summary></key>

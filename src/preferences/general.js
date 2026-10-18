@@ -10,6 +10,15 @@ function build(settings) {
     settings.bind('flash-count',flash,'value',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Screen flash (0 = Off)',flash);
     box.append(new Gtk.Separator());
+    const agendaReset=new Gtk.Button({label:'Agenda Reset'});
+    agendaReset.connect('clicked',()=>Common.confirm(box,'Reset agenda cards?',
+        'Restore deleted agenda cards and request the current agenda from Intra. This does not change subscriptions or submit feedback.',
+        'Reset',()=>{
+            settings.set_strv('dismissed-agenda-ids',[]);
+            settings.set_string('agenda-reset-request',GLib.uuid_string_random());
+            Gio.Settings.sync();
+        }));
+    box.append(agendaReset);
     const logout=new Gtk.Button({label:'Logout Intra'});
     logout.connect('clicked',()=>Common.confirm(box,'Log out of 42 Intra?',
         'You will need to log in again to view your Intra information.','Log Out',()=>{
