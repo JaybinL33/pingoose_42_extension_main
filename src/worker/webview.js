@@ -116,7 +116,7 @@ class Worker {
             header.set_title(title);
         };
         this.view.connect('notify::title', syncPageTitle);
-        this.navigation = imports.worker.navigation.create(this.view);
+        this.navigation = imports.worker.navigation.create(this.view, this.window);
         this.navigation.set_no_show_all(true);
         this.navigation.hide();
         header.pack_start(this.navigation);

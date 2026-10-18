@@ -12,7 +12,7 @@ const win = new Gtk.Window({title: site.name, default_width: 1050, default_heigh
 win.set_wmclass('pingoose-webview', 'PingooseWebView');
 win.set_icon_from_file(`${root}/assets/42intra.png`);
 const header = new Gtk.HeaderBar({title: site.name, show_close_button: true});
-header.pack_start(imports.worker.navigation.create(view));
+header.pack_start(imports.worker.navigation.create(view, win));
 win.set_titlebar(header);
 win.add(view);
 view.connect('notify::title', () => { const title=view.get_title() || site.name; win.title=title; header.title=title; });

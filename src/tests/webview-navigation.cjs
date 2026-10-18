@@ -5,9 +5,11 @@ class Actor {
  connect(signal,handler){this[signal]=handler;}
  set_image(image){this.image=image;}
  get_accessible(){return {set_name:name=>this.accessibleName=name};}
+ get_visible(){return this.visible !== false;}
+ set_propagation_phase(){}
  show_all(){}
 }
-const context={imports:{gi:{Gtk:{Box:Actor,Button:Actor,Image:{new_from_icon_name:name=>({name})},IconSize:{BUTTON:1}}}}};
+const context={imports:{gi:{Gtk:{Box:Actor,Button:Actor,Image:{new_from_icon_name:name=>({name})},IconSize:{BUTTON:1},EventControllerKey:{new:()=>new Actor()},PropagationPhase:{CAPTURE:1},accelerator_get_default_mod_mask:()=>7},Gdk:{KEY_F5:65474}}}};
 vm.createContext(context);vm.runInContext(fs.readFileSync('src/worker/navigation.js','utf8'),context);
 let changed,back=false,forward=false;
 const calls=[];
@@ -26,3 +28,14 @@ const source=fs.readFileSync('src/worker/webview.js','utf8');
 assert.match(source,/this.loginWindow = true;\s*this.navigation.hide\(\)/);
 assert.match(source,/command === 'show'.*this.navigation.show\(\)/);
 console.log('PASS: Back / Forward / Refresh order, history state, reload action; login navigation hidden');
+
+const key=bar._refreshKeys['key-pressed'];
+const before=calls.length;
+assert.equal(key(null,65474,0,0),true);
+assert.equal(calls.length,before+1);
+assert.equal(key(null,65474,0,1),false);
+assert.equal(key(null,65,0,0),false);
+bar.visible=false;
+assert.equal(key(null,65474,0,0),false);
+assert.equal(calls.length,before+1);
+console.log('PASS: F5 reloads once; other keys, modified keys and login view are ignored');
