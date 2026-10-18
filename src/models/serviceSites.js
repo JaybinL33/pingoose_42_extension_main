@@ -1,4 +1,10 @@
-const Defaults = typeof module !== 'undefined' ? require('./settingsDefaults.js') : imports.misc.extensionUtils.getCurrentExtension().imports.models.settingsDefaults;
+function loadDefaults() {
+    if (typeof module !== 'undefined') return require('./settingsDefaults.js');
+    // Standalone WebKit workers add the source root to their import path.
+    try { return imports.models.settingsDefaults; }
+    catch (_) { return imports.misc.extensionUtils.getCurrentExtension().imports.models.settingsDefaults; }
+}
+const Defaults = loadDefaults();
 var DEFAULT_SITES = Defaults.SERVICE_SITES;
 function normalizeSite(name, url) {
     name = String(name || '').trim();
