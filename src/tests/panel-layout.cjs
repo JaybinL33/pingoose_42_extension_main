@@ -1,5 +1,5 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
-const context={};vm.createContext(context);vm.runInContext(fs.readFileSync('src/ui/layout.js','utf8'),context);
+const context={imports:{gi:{Clutter:{ActorAlign:{START:0,END:1}}},ui:{main:{layoutManager:{findMonitorForActor:()=>({y:0,height:1080})}}}}};vm.createContext(context);vm.runInContext(fs.readFileSync('src/ui/layout.js','utf8'),context);
 const main={},older={visible:true,set_style(s){this.style=s;}},near={visible:true,set_style(s){this.style=s;}};
 const columns={get_children:()=>[older,near,main],set_style(s){this.style=s;}};
 const values={'popup-top-margin':6,'popup-left-margin':9,'main-panel-gap':12,'panel-gap':12};
@@ -11,3 +11,11 @@ values['main-panel-gap']=0;values['panel-gap']=4;controller._applyPanelLayout();
 assert.equal(older.style,'margin-right: 4px;');assert.equal(near.style,'margin-right: 0px;');
 near.visible=false;controller._applyPanelLayout();assert.equal(older.style,'margin-right: 0px;');
 console.log('PASS: default margins, independent gaps, zero gap and nearest visible panel');
+
+controller._indicator.get_transformed_position=()=>[100,1050];controller._indicator.height=30;
+controller._applyPanelLayout();
+assert.equal(main.y_align,1);assert.equal(older.y_align,1);assert.equal(main.y_expand,false);
+assert.match(columns.style,/padding-bottom: 6px/);
+controller._indicator.get_transformed_position=()=>[100,0];
+controller._applyPanelLayout();assert.equal(main.y_align,0);assert.match(columns.style,/padding-top: 6px/);
+console.log('PASS: bottom panel aligns all columns at the bottom; top panel remains top aligned');
