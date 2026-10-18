@@ -27,7 +27,7 @@ var Controller = class Controller {
             if (actor.text !== text) actor.text = text;
         }
         this._syncOptionalSections();
-        const key = JSON.stringify([rows, this._feedback, rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=899000])]);
+        const key = JSON.stringify([rows, this._feedback, rows.map(row=>(row.users || []).map(login=>!!this._chatPanel?.canEvaluation(row,login))), rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=899000])]);
         if (key === this._evaluationKey) return;
         this._evaluationKey = key;
         const section = this._indicator.evaluations;
@@ -69,6 +69,7 @@ var Controller = class Controller {
                 return actor;
             };
             label(`${row.project || 'Evaluation'}: ${['evaluator', 'corrector'].includes(row.kind) ? 'Evaluator' : 'Evaluatee'}`, 'pingoose-evaluation-title');
+            if(row.missing)label('Evaluation Missing · This match is no longer listed.', 'pingoose-evaluation-title');
             for (const login of row.users?.length ? row.users : [null]) {
                 const person = new St.BoxLayout({style_class: 'pingoose-evaluation-person'});
                 const avatar = new St.Bin({width: 44, height: 44, style_class: 'pingoose-avatar pingoose-counterpart-avatar', y_align: Clutter.ActorAlign.CENTER});
@@ -87,8 +88,9 @@ var Controller = class Controller {
                 details.add_child(new St.Label({text: `Seat · ${login ? row.seats?.[login] || 'Unavailable' : 'Unavailable'}`, style_class: 'pingoose-person-seat'}));
                 person.add_child(details);
                 box.add_child(person);
-                if(login && this._chatPanel?.canEvaluation(row,login)) {
-                    const chat=new St.Button({label:'Cluster Chat',can_focus:true,x_expand:true,style_class:'pingoose-visit-intra'});
+                if(login && this._chatPanel && Date.parse(row.begin)>now && Date.parse(row.begin)-now<=899000) {
+                    const available=!!this._chatPanel.canEvaluation(row,login);
+                    const chat=new St.Button({label:available?'Cluster Chat':'Cluster Chat · Unavailable',reactive:available,can_focus:available,opacity:available?255:110,x_expand:true,style_class:'pingoose-visit-intra'});
                     chat.connect('clicked',()=>this._chatPanel.openEvaluation(row,login));
                     box.add_child(chat);
                 }
@@ -114,6 +116,10 @@ var Controller = class Controller {
                 this._feedback[row.id] = value;
                 this._renderEvaluations(row.id);
             };
+            if(row.missing){
+                button('Remove Evaluation',()=>this._send(`feedback:${row.id}`));
+                continue;
+            }
             if (Date.parse(row.begin) <= Date.now()) {
                 if (this._feedback[row.id] === 'confirm') {
                     label(question, 'pingoose-feedback-question');

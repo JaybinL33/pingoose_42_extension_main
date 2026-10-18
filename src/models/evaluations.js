@@ -69,6 +69,8 @@ function storedState(text) {
         const parsed = parseRows([{...row, begin_at: row.begin, project_name: row.project,
             user: row.users, project_slug: row.slug}])[0];
         if (!parsed) throw new Error('storage-error');
+        parsed.missing=row.missing===true;
+        parsed.missingAt=Number.isFinite(row.missingAt)?row.missingAt:null;
         parsed.avatars = Array.isArray(row.avatars) ? row.avatars.filter(login => parsed.users.includes(login)) : [];
         parsed.seats = {};
         parsed.chatConfirmedAt = {};

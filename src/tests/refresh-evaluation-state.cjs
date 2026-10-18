@@ -12,10 +12,13 @@ const row={id:1,kind:'evaluator',project_name:'Test',begin_at:new Date(Date.now(
 const receive=rows=>p.receive(JSON.stringify(rows),identity);
 receive([row]);assert.equal(notices.length,1);
 receive([row]);assert.equal(notices.length,1,'unchanged refresh creates no notification');
-receive([]);assert.equal(saved.evaluations.length,1,'temporarily absent evaluation remains until user dismisses');
-receive([row,{...row,id:2}]);assert.equal(notices.length,2,'only new evaluation announces');
+receive([]);assert.equal(saved.evaluations.length,1,'absent evaluation remains until user dismisses');
+assert.equal(saved.evaluations[0].missing,true);
+assert.equal(notices.filter(n=>n.id.startsWith('missing:')).length,1);
+receive([]);assert.equal(notices.filter(n=>n.id.startsWith('missing:')).length,1,'missing alert is not repeated');
+receive([row,{...row,id:2}]);assert.equal(notices.filter(n=>n.id.startsWith('intrapy:')).length,2,'only new evaluation announces');
 saved.dismissed.push('1');saved.evaluations=saved.evaluations.filter(r=>r.id!=='1');
-receive([row,{...row,id:2}]);assert.equal(notices.length,2);assert(!saved.evaluations.some(r=>r.id==='1'));
+receive([row,{...row,id:2}]);assert.equal(notices.filter(n=>n.id.startsWith('intrapy:')).length,2);assert(!saved.evaluations.some(r=>r.id==='1'));
 receive([{...row,id:2,begin_at:new Date(Date.now()+7200000).toISOString()}]);
 assert.equal(notices.filter(n=>n.id.startsWith('rescheduled:')).length,1);
 const old=JSON.stringify(saved);p.receive('invalid',identity);assert.equal(JSON.stringify(saved),old);
@@ -36,6 +39,18 @@ function seatLookup(seat){
 seatLookup('c1r1s1');const afterFirst=notices.length;
 seatLookup('c1r1s1');assert.equal(notices.length,afterFirst,'same seat must not announce again');
 seatLookup('c1r1s2');assert.equal(notices.length,afterFirst+1,'changed seat announces');
+seatLookup(null);
+assert.equal(holder.evaluationState.evaluations[0].seats.peer,'Unavailable');
+assert.equal(holder.evaluationState.evaluations[0].chatConfirmedAt.peer,undefined,'failed lookup revokes cached confirmation');
 holder.evaluationState.evaluations=[];seatLookup('c1r1s3');
 assert.equal(notices.length,afterFirst+1,'dismissed evaluation ignores delayed seat result');
 console.log('PASS: persisted seat-notice deduplication, changed seats and stale lookup completion');
+
+const past={...row,id:9,begin_at:new Date(Date.now()-60000).toISOString()};
+receive([past]);
+const frozen=JSON.stringify(saved.evaluations.find(r=>r.id==='9'));
+receive([{...past,user:'other',project_name:'Changed'}]);
+assert.equal(JSON.stringify(saved.evaluations.find(r=>r.id==='9')),frozen,'past evaluation is frozen');
+receive([]);
+assert.equal(JSON.stringify(saved.evaluations.find(r=>r.id==='9')),frozen,'past evaluation disappearance is not missing');
+console.log('PASS: post-start snapshot freezes and normal disappearance does not create a missing flag');

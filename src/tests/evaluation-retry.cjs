@@ -10,7 +10,7 @@ p.scheduleEvaluationPoll();assert.equal(delay,250,'request one second after the 
 time+=250;p.scheduleEvaluationPoll();assert.equal(delay,5000,'unknown counterpart retries every 5 seconds');
 row.users=['peer'];p.scheduleEvaluationPoll();assert.equal(delay,5000,'missing seat retries');
 row.seats={peer:'c1r1s1'};row.chatConfirmedAt={peer:time};
-p.scheduleEvaluationPoll();assert.equal(delay,10000,'confirmed counterpart returns to regular monitoring');
+p.scheduleEvaluationPoll();assert.equal(delay,5000,'confirmed counterpart is still checked until start');
 row.seats={};time=Date.parse(row.begin);p.scheduleEvaluationPoll();assert.equal(delay,10000,'no targeted retry after start');
 p.notBefore=time/1000+60;p.scheduleEvaluationPoll();assert.equal(delay,60000,'server cooldown wins');
-console.log('PASS: 15 minute deadline plus one second delay, 5 second retries, completion/start termination and server cooldown');
+console.log('PASS: 15 minute deadline plus one second delay, 5 second retries, continuous updates/start termination and server cooldown');

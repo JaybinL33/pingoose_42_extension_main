@@ -26,3 +26,7 @@ const selfRow={...row,devTest:true,devSelf:true};
 assert.equal(P.grantsFrom([selfRow],now,'someone-else').length,0);
 assert.equal(P.grantsFrom([selfRow],now,'peer')[0].testSelf,true);
 assert.equal(P.grantsFrom([selfRow],now+899000,'peer').length,0);
+assert.equal(P.grantsFrom([row],now+15001).length,0,'stale seat must revoke chat');
+assert.equal(P.grantsFrom([{...row,seats:{peer:'Unavailable'},chatConfirmedAt:{}}],now).length,0,'logout revokes chat');
+
+assert.equal(P.grantsFrom([{...row,missing:true}],now).length,0,'missing evaluation disables chat');

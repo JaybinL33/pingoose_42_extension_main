@@ -33,6 +33,7 @@ var Controller = class Controller {
             Main.messageTray.add(this._bannerSource);
         }
         const title = message.test ? 'Test notification' : message.category === 'agenda' ? 'New agenda event' :
+            message.id.startsWith('missing:') ? 'Evaluation missing' :
             message.id.startsWith('reminder:') ? 'Evaluation reminder' :
             message.id.startsWith('seat:') ? 'Evaluation location' :
             message.id.startsWith('rescheduled:') ? 'Evaluation rescheduled' : 'Evaluation matched';

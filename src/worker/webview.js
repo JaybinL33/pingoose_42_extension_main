@@ -372,6 +372,7 @@ class Worker {
         catch (_) { this.fail('response-error'); return false; }
         let plan;
         let previousRows = new Map();
+        const missingNotices=[];
         try {
             const previous = this.readState();
             plan = Model.advanceSeen(previous, identity.subject, rows);
@@ -379,10 +380,18 @@ class Worker {
             previousRows = new Map(retained);
             for (const row of rows) if (!plan.state.dismissed.includes(row.id)) {
                 const cached=retained.get(row.id);
+                if(cached && Date.parse(cached.begin)<=Date.now())continue;
                 const remaining=Date.parse(row.begin)-Date.now();
                 const users=!row.users.length && cached?.begin===row.begin && remaining>0 && remaining<=899000
                     ? cached.users : row.users;
-                retained.set(row.id, {...cached,...row,users});
+                retained.set(row.id, {...cached,...row,users,missing:false,missingAt:null});
+            }
+            const present=new Set(rows.map(row=>row.id));
+            for(const [id,cached] of retained){
+                if(!present.has(id) && Date.parse(cached.begin)>Date.now() && !cached.missing){
+                    const missing={...cached,missing:true,missingAt:Date.now(),chatConfirmedAt:{}};
+                    retained.set(id,missing);missingNotices.push(missing);
+                }
             }
             plan.state.evaluations = [...retained.values()];
             this.evaluationState = plan.state;
@@ -390,9 +399,11 @@ class Worker {
         } catch (_) { this.fail('storage-error'); return false; }
         // shortcut: a crash after saving can lose delivery; add acknowledgements if durable delivery is needed.
         for (const row of plan.added) emit(Model.notification(row));
+        for(const row of missingNotices)emit({type:'notification',id:`missing:${row.id}:${row.missingAt}`,body:`Evaluation Missing · ${row.project}\nThis match is no longer listed. It may have been cancelled.`});
         this.publishEvaluations();
         for (const row of rows) {
             const previous = previousRows.get(row.id);
+            if(previous && Date.parse(previous.begin)<=Date.now())continue;
             if (previous && previous.begin !== row.begin && !this.evaluationState.dismissed.includes(row.id))
                 emit({type: 'notification', id: `rescheduled:${row.id}:${row.begin}`, body: `Evaluation time changed · ${row.project}\n${new Date(row.begin).toLocaleString('en-GB')}`});
             const identityChanged = previous && row.users.length && JSON.stringify(previous.users) !== JSON.stringify(row.users);
@@ -411,9 +422,8 @@ class Worker {
         this.counterpartChecks ||= new Map();
         for (const row of this.evaluationState.evaluations) {
             const remaining=Date.parse(row.begin)-Date.now();
-            if(remaining<=0 || remaining>899000)continue;
+            if(row.missing || remaining<=0 || remaining>899000)continue;
             for(const login of row.users || []){
-                if(this.counterpartReady(row,login))continue;
                 const key=`${row.id}:${row.begin}:${login}`;
                 if(now()>=(this.counterpartChecks.get(key)||0)){
                     this.counterpartChecks.set(key,Infinity);
@@ -442,7 +452,7 @@ class Worker {
         for(const row of this.evaluationState?.evaluations || []){
             const remaining=Date.parse(row.begin)-time;
             if(remaining>899000)delay=Math.min(delay,remaining-899000);
-            else if(remaining>0 && (!row.users?.length || row.users.some(login=>!this.counterpartReady(row,login))))
+            else if(remaining>0)
                 delay=Math.min(delay,5000);
         }
         this.nextPoll=Math.max(now()+delay/1000,this.notBefore);
@@ -485,7 +495,7 @@ class Worker {
                         const bytes = item.get_data_finish(result);
                         if (stopped || this.auth !== identity || !bytes?.length || bytes.length > 2000000) return;
                         const active = this.evaluationState?.evaluations.find(value => value.id === row.id);
-                        if (!active || !active.users.includes(login)) return;
+                        if (!active || active.missing || active.begin!==row.begin || Date.parse(active.begin)<=Date.now() || !active.users.includes(login)) return;
                         Gio.File.new_for_path(`${this.stateDirectory}/counterpart-${login}`).replace_contents(bytes, null, false,
                             Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
                         avatarSaved = true;
@@ -507,16 +517,17 @@ class Worker {
             this.counterpartChecks?.set(`${row.id}:${row.begin}:${login}`,now());
             if (stopped || this.auth !== identity) return;
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id && item.begin === row.begin);
-            // Keep a confirmed pre-start seat through transient lookup failures.
-            const cached=stored && Date.parse(stored.begin)>Date.now() &&
-                stored.chatConfirmedAt?.[login]>=Date.parse(stored.begin)-899000 ? stored.seats?.[login] : null;
-            row.seats = {...row.seats, [login]: seat || cached || 'Unavailable'};
+            // A missing seat revokes chat; never fall back to an old location.
+            if(!stored || stored.missing || Date.parse(stored.begin)<=Date.now())return;
+            row.seats = {...row.seats, [login]: seat || 'Unavailable'};
             const seatNotice=`${row.id}:seat:${row.begin}:${login}:${seat}`;
             const notify=seat && stored && !this.evaluationState.reminders.includes(seatNotice);
             if(notify)this.evaluationState.reminders=[...this.evaluationState.reminders,seatNotice].slice(-2000);
             if (stored) {
-                stored.seats = {...stored.seats, ...row.seats};
-                if(seat)stored.chatConfirmedAt={...stored.chatConfirmedAt,[login]:Date.now()};
+                stored.seats = {...stored.seats, [login]:seat || 'Unavailable'};
+                stored.chatConfirmedAt={...stored.chatConfirmedAt};
+                if(seat)stored.chatConfirmedAt[login]=Date.now();
+                else delete stored.chatConfirmedAt[login];
                 this.writeState(this.evaluationState); this.publishEvaluations();
             }
             if (notify) emit({type: 'notification', id: `seat:${row.id}:${login}:${seat}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
@@ -838,7 +849,7 @@ class Worker {
             const id = command.slice(9);
             if (!this.auth || !this.evaluationState) return;
             const row = this.evaluationState.evaluations.find(item => item.id === id);
-            if (!row || Date.parse(row.begin) > Date.now()) return;
+            if (!row || (!row.missing && Date.parse(row.begin) > Date.now())) return;
             this.evaluationState.dismissed = [...new Set([...this.evaluationState.dismissed, id])].slice(-2000);
             this.evaluationState.evaluations = this.evaluationState.evaluations.filter(item => item.id !== id);
             this.evaluationState.reminders = this.evaluationState.reminders.filter(key => !key.startsWith(`${id}:`));
