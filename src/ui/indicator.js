@@ -36,16 +36,9 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         box.add_child(this.icon);
         this.count = new St.Label({text: '42', y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-count'});
         box.add_child(this.count);
-        this.brandIcon = new St.Icon({gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${Me.path}/assets/42intra.png`)),
-            icon_size: 18, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-panel-brand'});
-        box.add_child(this.brandIcon);
-        const syncBrand = () => {
-            const normal = this.count.text === '42';
-            this.brandIcon.visible = normal;
-            this.count.visible = !normal;
-        };
-        this.count.connect('notify::text', syncBrand);
-        syncBrand();
+        const syncStatus = () => { this.count.visible = this.count.text !== '42'; };
+        this.count.connect('notify::text', syncStatus);
+        syncStatus();
         this.add_child(box);
         const profileItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         profileItem.remove_all_children();
