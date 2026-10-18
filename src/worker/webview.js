@@ -386,6 +386,7 @@ class Worker {
                     ? cached.users : row.users;
                 retained.set(row.id, {...cached,...row,users,missing:false,missingAt:null});
             }
+            // Monitor missing matches from first discovery, independently of the 15-minute seat window.
             const present=new Set(rows.map(row=>row.id));
             for(const [id,cached] of retained){
                 if(!present.has(id) && Date.parse(cached.begin)>Date.now() && !cached.missing){

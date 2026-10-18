@@ -124,9 +124,7 @@ var Controller = class Controller {
                     button('Yes',()=>this._send(`feedback:${row.id}`));
                     button('Later',()=>step(null));
                 }else button('Remove Evaluation',()=>step('missing-confirm'));
-                continue;
-            }
-            if (Date.parse(row.begin) <= Date.now()) {
+            } else if (Date.parse(row.begin) <= Date.now()) {
                 if (this._feedback[row.id] === 'confirm') {
                     label(question, 'pingoose-feedback-question');
                     actionRow = new St.BoxLayout({style_class: 'pingoose-feedback-actions', x_expand: true});
