@@ -32,8 +32,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         super._init(0.0, 'Pingoose');
         this.accessible_name = 'Pingoose Notifications';
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
-        this.icon = new St.Icon({gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${Me.path}/assets/penguin.svg`)),
-            icon_size: 20, style_class: 'pingoose-panel-penguin'});
+        this._initFlapIcon();
         box.add_child(this.icon);
         this.count = new St.Label({text: '42', y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-count'});
         box.add_child(this.count);
@@ -222,6 +221,39 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
             if (open && this.lastProfile) this.updateProfile(this.lastProfile);
         });
         this.setLoginOnly(true);
+    }
+
+    _initFlapIcon() {
+        const path = imports.misc.extensionUtils.getCurrentExtension().path;
+        const frames = Array.from({length: 12}, (_, index) => new Gio.FileIcon({
+            file: Gio.File.new_for_path(`${path}/assets/flap/flap-${String(index).padStart(2, '0')}-symbolic.svg`),
+        }));
+        this.icon = new St.Icon({gicon: frames[0], icon_size: 24, style_class: 'system-status-icon'});
+        const settings = St.Settings.get();
+        let timer = 0;
+        const stop = () => {
+            if (timer) GLib.source_remove(timer);
+            timer = 0;
+        };
+        const sync = () => {
+            stop();
+            this.icon.gicon = frames[0];
+            if (!settings.enable_animations || !this.icon.mapped) return;
+            const started = GLib.get_monotonic_time();
+            // The supplied flap sequence is 12 frames over 800 ms; skip stale frames after a stall.
+            timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 67, () => {
+                const elapsed = (GLib.get_monotonic_time() - started) / 1000;
+                this.icon.gicon = frames[Math.floor(elapsed * frames.length / 800) % frames.length];
+                return GLib.SOURCE_CONTINUE;
+            });
+        };
+        const signal = settings.connect('notify::enable-animations', sync);
+        this.icon.connect('notify::mapped', sync);
+        this.icon.connect('destroy', () => {
+            stop();
+            settings.disconnect(signal);
+        });
+        sync();
     }
 
     checkProfileReady() {
