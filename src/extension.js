@@ -16,6 +16,7 @@ const STATUS = Object.fromEntries([
 
 class Pingoose {
     enable() {
+        this._resetting=false;this._resetReady=false;this._resetWorkerExited=false;
         this._flashActors = [];
         this._flashTimer = 0;
         this._lastFlash = -Infinity;
@@ -23,6 +24,11 @@ class Pingoose {
         this._notificationSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
         this._indicator = new Indicator();
         this._indicator.onLogin = () => this._send('login');
+        this._indicator.onProjectOpen = project => {
+            if (this._settings.get_boolean('project-open-direct')) this._visitProject(project);
+            else this._projectPanel.open(project);
+        };
+
         this._indicator.onCountChanged = () => this._updatePanelLabel();
         Main.panel.addToStatusArea(Me.uuid, this._indicator);
         this._profileClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
@@ -52,11 +58,18 @@ class Pingoose {
         this._settingsChanged = this._settings.connect('changed::flash-count', () => this._clearFlash());
         this._renderCards();
         this._chatPanel = new Me.imports.ui.chatPanel.ChatPanel(this._indicator);
+        this._servicePanel = new Me.imports.ui.servicePanel.ServicePanel(this._indicator, command => this._send(command));
+        this._projectPanel = new Me.imports.ui.projectPanel.ProjectPanel(this._indicator, project => this._visitProject(project));
         this._buildSettings();
         this._sessionHook = new Me.imports.services.systemSessionHook.SystemSessionHook(
             (command, callback) => this._sessionSlotRequest(command, callback),
             () => !!this._process && !this._indicator.loginOnly);
         this._sessionHook.enable();
+        this._startWorker();
+        this._requestFullReset();
+    }
+
+    _startWorker() {
         try {
             this._process = Gio.Subprocess.new(['/usr/bin/gjs', `${Me.path}/worker/webview.js`],
                 Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE);
@@ -66,6 +79,11 @@ class Pingoose {
             proc.wait_async(null, (child, result) => {
                 try { child.wait_finish(result); } catch (_) { /* Already stopping. */ }
                 if (this._process === child && this._indicator) {
+                    if (this._resetting) {
+                        this._resetWorkerExited=true;
+                        if(this._resetReady){this._process=null;this._finishFullReset();}
+                        return;
+                    }
                     this._process = null;
                     if (!['worker-busy', 'worker-error'].includes(this._workerStatus))
                         this._indicator.status.label.text = 'Intra monitoring stopped. Restart the extension.';
@@ -76,7 +94,13 @@ class Pingoose {
         }
     }
 
+    _visitProject(project) {
+        this._send('project:open:' + JSON.stringify(project));
+        this._indicator.menu.close();
+    }
+
     _clearProfile() {
+        this._projectPanel?.reset();
         this._chatPanel?.reset();
         this._slots = [];
         this._slotsExpanded = false;
@@ -119,8 +143,13 @@ class Pingoose {
         input.read_line_async(GLib.PRIORITY_DEFAULT, cancel, (stream, result) => {
             try {
                 const [line] = stream.read_line_finish_utf8(result);
-                if (this._process !== proc || cancel.is_cancelled() || line === null)
+                if (this._process !== proc || cancel.is_cancelled()) return;
+                if(line===null){
+                    if(this._resetting && !this._resetReady){
+                        this._resetting=false;this._settings.set_string('reset-status','error');
+                    }
                     return;
+                }
                 if (line.length <= 4194304) {
                     try { this._message(JSON.parse(line)); }
                     catch (_) {
@@ -168,6 +197,15 @@ class Pingoose {
     _message(message) {
         if (!message || typeof message !== 'object')
             return;
+        if (message.type === 'reset-ready') {
+            this._resetReady=true;
+            if(this._resetWorkerExited){this._process=null;this._finishFullReset();}
+            return;
+        }
+        if (message.type === 'reset-error') {
+            this._resetting=false;this._settings.set_string('reset-status','error');return;
+        }
+        if (this._resetting) return;
         if (message.type === 'slots') {
             const callback = this._sessionSlotsCallback;
             this._sessionSlotsCallback = null;
@@ -260,6 +298,10 @@ class Pingoose {
     }
 
     disable() {
+        this._projectPanel?.destroy();
+        this._projectPanel = null;
+        this._servicePanel?.destroy();
+        this._servicePanel = null;
         this._chatPanel?.destroy();
         this._chatPanel = null;
         this._logoutDialog?.destroy();
@@ -306,7 +348,7 @@ class Pingoose {
 }
 
 // Feature controllers share this extension's lifecycle and state.
-for (const name of ['settings', 'evaluations', 'slots', 'agenda', 'notifications', 'visibility']) {
+for (const name of ['settings', 'evaluations', 'slots', 'agenda', 'notifications', 'visibility', 'reset']) {
     const descriptors = Object.getOwnPropertyDescriptors(Me.imports.ui[name].Controller.prototype);
     delete descriptors.constructor;
     Object.defineProperties(Pingoose.prototype, descriptors);

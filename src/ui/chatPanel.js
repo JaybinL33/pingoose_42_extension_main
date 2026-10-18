@@ -1,6 +1,7 @@
 // Chat UI adapted from origin/deeeev-gangjeon; displayed beside the main menu.
 const {Clutter, GLib, Pango, St} = imports.gi;
 const Main = imports.ui.main;
+const MessageTray = imports.ui.messageTray;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Chat = Me.imports.services.chat;
@@ -50,6 +51,8 @@ var ChatPanel = class ChatPanel {
         this._chatUi.toggle.label = count ? `Cluster Chat · ${count > 5 ? '5+' : count}` : 'Cluster Chat';
     }
     reset() {
+        this._chatBannerSource?.destroy();
+        this._chatBannerSource = null;
         this._expanded = false;
         this._chatUi.entry.text = '';
         this._chatUi.peerEntry.text = '';
@@ -67,6 +70,8 @@ var ChatPanel = class ChatPanel {
         this.sync();
     }
     destroy() {
+        this._chatBannerSource?.destroy();
+        this._chatBannerSource = null;
         this._settings.disconnect(this._settingsSignal);
         this._chat.destroy();
         this._chatUi = null;
@@ -78,16 +83,27 @@ var ChatPanel = class ChatPanel {
         this._chatActive = null;
         const ui = this._chatUi = {stick: true};
         const root = new St.BoxLayout({vertical: true, reactive: true, visible: false,
-            y_align: Clutter.ActorAlign.START, style_class: 'pingoose-chat pingoose-chat-panel'});
+            y_expand: false, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-chat pingoose-chat-panel'});
         ui.root = root;
         // Share the popup grab so interacting with chat does not close the main menu.
         const bin = indicator.menu._boxPointer.bin;
         const main = indicator.menu.box;
+        // Each column keeps its natural height instead of stretching to the tallest panel.
+        main.request_mode = Clutter.RequestMode.HEIGHT_FOR_WIDTH;
+        main.x_expand = false;
+        main.y_expand = false;
+        main.y_align = Clutter.ActorAlign.START;
         bin.remove_child(main);
-        const columns = new St.BoxLayout({style_class: 'pingoose-chat-columns'});
+        indicator.menu.actor.add_style_class_name('pingoose-panel-host');
+        main.add_style_class_name('pingoose-main-panel');
+        const columns = new St.BoxLayout({request_mode: Clutter.RequestMode.HEIGHT_FOR_WIDTH,
+            style_class: 'pingoose-chat-columns'});
         columns.add_child(root);
         columns.add_child(main);
         bin.set_child(columns);
+        indicator.sideColumns = columns;
+        // Main stays last; moving a panel immediately before it preserves the others' order.
+        indicator.bringPanelNearMain = panel => columns.set_child_below_sibling(panel, main);
         const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         item.remove_all_children();
         item.add_style_class_name('pingoose-overview-item');
@@ -99,6 +115,7 @@ var ChatPanel = class ChatPanel {
         ui.item = item;
         toggle.connect('clicked', () => {
             this._expanded = !this._expanded;
+            if (this._expanded) indicator.bringPanelNearMain(root);
             if (this._expanded && this._chat.state === 'stopped') this._chat.start();
             this.sync();
         });
@@ -275,6 +292,7 @@ var ChatPanel = class ChatPanel {
 
     _appendChatEntry(entry) {
         const ui = this._chatUi;
+        while (ui.log.get_children().length >= 200) ui.log.get_children()[0].destroy();
         ui.placeholder?.destroy();
         ui.placeholder = null;
         if (entry.dir === 'sys') {
@@ -308,7 +326,30 @@ var ChatPanel = class ChatPanel {
         }
         this._renderChatChips();
         this._updatePanelLabel();
-        Main.notify(`Cluster Chat · ${key}`, entry.text.slice(0, 200));
+        this._notifyChat(key, entry.text);
+    }
+
+    _notifyChat(key, text) {
+        const now = GLib.get_monotonic_time();
+        if (this._lastChatBanner && now - this._lastChatBanner < 3000000) return;
+        this._lastChatBanner = now;
+        if (!this._chatBannerSource) {
+            this._chatBannerSource = new MessageTray.Source('Cluster Chat', 'user-available-symbolic');
+            this._chatBannerSource.connect('destroy', () => { this._chatBannerSource = null; });
+            Main.messageTray.add(this._chatBannerSource);
+        }
+        const banner = new MessageTray.Notification(this._chatBannerSource, `Cluster Chat · ${key}`, text.slice(0, 200));
+        banner.setTransient(true);
+        banner.connect('activated', () => {
+            if (!this._chat.peer(key) || !this._settings.get_boolean('chat-enabled')) return;
+            this._settings.set_boolean('show-chat', true);
+            this._expanded = true;
+            this._indicator.bringPanelNearMain(this._chatUi.root);
+            this._indicator.menu.open();
+            this.sync();
+            this._selectChat(key);
+        });
+        this._chatBannerSource.showNotification(banner);
     }
 
     _selectChat(key) {

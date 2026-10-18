@@ -1,6 +1,41 @@
+const Me = imports.misc.extensionUtils.getCurrentExtension();
 
 
 var Controller = class Controller {
+    _applySectionOrder() {
+        const indicator = this._indicator;
+        const groups = {
+            profile: [indicator.profileItem, indicator.profileSeparator],
+            overview: [indicator.overviewItem, indicator.overviewSeparator],
+            slots: [indicator.slotsButtonItem, indicator.slotsItem],
+            evaluations: [indicator.evaluationItem, indicator.evaluationSeparator],
+            agenda: [indicator.agendaItem, indicator.agendaSeparator],
+            notifications: [indicator.notificationItem, indicator.notificationSeparator],
+            chat: [this._chatPanel?._chatUi?.item],
+            services: [this._servicePanel?.item],
+        };
+        const order = Me.imports.models.appearance.read(this._settings);
+        const box = indicator.menu.box;
+        // Keep the options toolbar first and the signed-out welcome view last.
+        let index = 1;
+        for (const key of order) {
+            for (const item of groups[key]) {
+                const actor = item?.actor || item;
+                if (!actor || actor.get_parent() !== box) continue;
+                if (box.get_child_at_index(index) !== actor) box.set_child_at_index(actor, index);
+                index++;
+            }
+        }
+        const visible = order.filter(key => {
+            const item = groups[key][0];
+            return !!(item?.actor || item)?.visible;
+        });
+        for (const key of ['profile', 'overview', 'evaluations', 'agenda']) {
+            const separator = groups[key][1];
+            if (separator) (separator.actor || separator).visible = visible.includes(key) && key !== visible[visible.length - 1];
+        }
+    }
+
     _updatePanelLabel() {
         const indicator = this._indicator;
         if (!indicator) return;
@@ -16,6 +51,8 @@ var Controller = class Controller {
 
     _syncOptionalSections() {
         this._chatPanel?.sync();
+        this._servicePanel?.sync();
+        this._projectPanel?.sync();
         this._updatePanelLabel();
         const indicator = this._indicator;
         if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly;

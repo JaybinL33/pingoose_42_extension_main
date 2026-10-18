@@ -177,10 +177,10 @@ class Worker {
             this.timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
                 this.tick(); return GLib.SOURCE_CONTINUE;
             });
-            // Try automatic background refresh first
+            // Restore the private WebKit session; tokens are observed in memory only.
             if (this.signedOut) status('login-needed');
             else {
-                if (!this.tryPythonRefresh()) status('loading');
+                status('loading');
                 this.view.load_uri(HOME);
             }
         }
@@ -304,40 +304,6 @@ class Worker {
                     null, false, Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
             } catch (_) { this.profileDiagnostics[path] = {error: 'response-unavailable'}; }
         });
-    }
-
-    tryPythonRefresh() {
-        if (this.signedOut || this.webLoginOnlyFile.query_exists(null)) return false;
-        try {
-            const extDir = GLib.path_get_dirname(System.programPath);
-            const candidates = [
-                GLib.build_filenamev([extDir, 'token_refresher.py']),
-                GLib.build_filenamev([GLib.get_home_dir(), 'hack42', 'token_refresher.py']),
-                GLib.build_filenamev([GLib.get_home_dir(), 'hack42', 'intra_pure.py']),
-            ];
-            let pyScript = null;
-            for (const path of candidates) {
-                if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
-                    pyScript = path;
-                    break;
-                }
-            }
-            if (!pyScript) return false;
-
-            const pyBin = GLib.find_program_in_path('python3') || '/usr/bin/python3';
-            const launcher = new Gio.SubprocessLauncher({
-                flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE
-            });
-            const proc = launcher.spawnv([pyBin, pyScript]);
-            const [ok, stdout, stderr] = proc.communicate_utf8(null, null);
-            proc.wait(null);
-            const token = (stdout || '').trim();
-            if (token && token.startsWith('eyJ')) {
-                this.acceptAuthorization(`Bearer ${token}`);
-                return true;
-            }
-        } catch (_) {}
-        return false;
     }
 
     acceptAuthorization(header) {
@@ -543,17 +509,11 @@ class Worker {
         if (this.auth && now() >= this.nextProfileRead) this.readProfile();
         if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
-            if (this.tryPythonRefresh()) {
-                this.poll();
-                return;
-            }
             this.view.load_uri(HOME);
         }
         if (this.auth && !this.pending && now() >= this.nextPoll) this.poll();
         if (!this.auth && !this.view.is_loading && now() - this.lastPageLoad > 30 && this.reloadAt === Infinity) {
-            if (!this.tryPythonRefresh()) {
-                status('login-needed');
-            }
+            status('login-needed');
         }
     }
 
@@ -629,11 +589,7 @@ class Worker {
             if (stopped || this.auth !== identity) return;
             if (state === 'auth-error') {
                 this.auth = null;
-                // Immediate background token refresh
-                if (this.tryPythonRefresh()) {
-                    this.poll();
-                    return;
-                }
+                // Reload the authenticated WebKit session to obtain a fresh token.
                 this.reloadAt = now() + this.backoff;
             }
             if (state) this.fail(state, wait);
@@ -668,8 +624,10 @@ class Worker {
         });
     }
 
-    logout(state = 'login-needed') {
-        if (this.clearingLogin) return;
+    logout(state = 'login-needed', complete = null) {
+        this.closeServices();
+        for (const window of this.projectWindows || []) window.destroy();
+        if (this.clearingLogin) { complete?.(false); return; }
         this.signedOut = true;
         this.clearingLogin = true;
         this.auth = null;
@@ -690,7 +648,7 @@ class Worker {
         for (const marker of [this.signedOutFile, this.webLoginOnlyFile])
             marker.replace_contents(ByteArray.fromString('1'), null, false,
                 Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-        for (const name of ['profile-avatar', 'profile-diagnostics.json', 'profile-image-status.json']) {
+        for (const name of ['session.json', 'intrapy-evaluations.json', 'profile-avatar', 'profile-diagnostics.json', 'profile-image-status.json']) {
             try { Gio.File.new_for_path(`${this.stateDirectory}/${name}`).delete(null); } catch (_) {}
         }
         emit({type: 'signed-out'});
@@ -698,8 +656,9 @@ class Worker {
         this.view.load_uri('about:blank');
         this.dataManager.clear(WebKit2.WebsiteDataTypes.ALL, 0, null, (manager, result) => {
             try { manager.clear_finish(result); }
-            catch (_) { status('storage-error'); return; }
+            catch (_) { this.clearingLogin = false; status('storage-error'); complete?.(false); return; }
             this.clearingLogin = false;
+            complete?.(true);
         });
     }
 
@@ -719,7 +678,47 @@ class Worker {
         finally { files?.close(null); }
     }
 
+    closeServices() {
+        for (const window of this.serviceWindows || []) window.destroy();
+        this.serviceWindows = new Set();
+    }
+
     command(command) {
+        if (command === 'reset-all') {
+            this.logout('login-needed', success => {
+                if (!success) { emit({type:'reset-error'}); return; }
+                emit({type:'reset-ready'});
+                stop();
+            });
+            return;
+        }
+        if (command.startsWith('project:open:')) {
+            if (!this.auth || this.signedOut || this.clearingLogin) return;
+            try {
+                const project = JSON.parse(command.slice('project:open:'.length));
+                if (!/^[a-zA-Z0-9_-]{1,100}$/.test(project.slug) || project.login !== this.login) return;
+                this.projectWindows ||= new Set();
+                if (this.projectWindows.size >= 5) return;
+                const window = imports.worker.serviceBrowser.open(this.context, project.name,
+                    `https://projects.intra.42.fr/${project.slug}/${project.login}`, true);
+                this.projectWindows.add(window);
+                window.connect('destroy', () => this.projectWindows.delete(window));
+            } catch (_) { status('service-error'); }
+            return;
+        }
+        if (command === 'service:close') { this.closeServices(); return; }
+        if (command.startsWith('service:open:')) {
+            if (this.signedOut || this.clearingLogin) return;
+            try {
+                const site = JSON.parse(command.slice('service:open:'.length));
+                this.serviceWindows ||= new Set();
+                if (this.serviceWindows.size >= 5) return;
+                const window = imports.worker.serviceBrowser.open(this.context, site.name, site.url);
+                this.serviceWindows.add(window);
+                window.connect('destroy', () => this.serviceWindows.delete(window));
+            } catch (_) { status('service-error'); }
+            return;
+        }
         if (command === 'slots:list' || command === 'slots:all' || command === 'slots:future' || /^slots:close:[0-9]+$/.test(command)) {
             if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
             this.slotsService ||= new imports.services.slotsService.SlotsService(this.context, allowedURI);
@@ -771,13 +770,15 @@ class Worker {
             try {
                 const [line] = input.read_line_finish_utf8(result);
                 if (line === null) { stop(); return; }
-                if (line.length <= 160) this.command(line.trim());
+                if (line.length <= 4096) this.command(line.trim());
                 if (!stopped) this.readCommand();
             } catch (_) { if (!stopped) stop(1); }
         });
     }
 
     close() {
+        this.closeServices();
+        for (const window of this.projectWindows || []) window.destroy();
         this.slotsService?.close();
         this.cancel.cancel();
         this.pending?.cancel();

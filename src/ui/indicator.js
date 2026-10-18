@@ -2,6 +2,7 @@ const {Clutter, Gio, GLib, GObject, Pango, St} = imports.gi;
 const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
+const Me = imports.misc.extensionUtils.getCurrentExtension();
 
 function deadlineText(deadline, today = new Date()) {
     if (typeof deadline !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return '—';
@@ -31,10 +32,21 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         super._init(0.0, 'Pingoose');
         this.accessible_name = 'Pingoose Notifications';
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
-        this.icon = new St.Icon({icon_name: 'preferences-system-notifications-symbolic', style_class: 'system-status-icon'});
+        this.icon = new St.Icon({gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${Me.path}/assets/penguin.svg`)),
+            icon_size: 20, style_class: 'pingoose-panel-penguin'});
         box.add_child(this.icon);
         this.count = new St.Label({text: '42', y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-count'});
         box.add_child(this.count);
+        this.brandIcon = new St.Icon({gicon: Gio.FileIcon.new(Gio.File.new_for_path(`${Me.path}/assets/42intra.png`)),
+            icon_size: 18, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-panel-brand'});
+        box.add_child(this.brandIcon);
+        const syncBrand = () => {
+            const normal = this.count.text === '42';
+            this.brandIcon.visible = normal;
+            this.count.visible = !normal;
+        };
+        this.count.connect('notify::text', syncBrand);
+        syncBrand();
         this.add_child(box);
         const profileItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         profileItem.remove_all_children();
@@ -283,15 +295,14 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
             item.add_style_class_name('pingoose-project-item');
             item.label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
             item.connect('activate', () => {
-                const url = `https://projects.intra.42.fr/${project.slug}/${data.login}`;
-                try { Gio.AppInfo.launch_default_for_uri(url, global.create_app_launch_context(0, -1)); }
-                catch (_) { Main.notify('Pingoose', 'Unable to open the project. Check your default browser settings.'); }
+                this.onProjectOpen?.({slug: project.slug, name: project.name, login: data.login});
             });
             this.projects.addMenuItem(item);
         }
     }
 
     setLoginOnly(loginOnly) {
+        if (this.loginOnly === loginOnly) return;
         this.loginOnly = loginOnly;
         this.icon.visible = true;
         this.accessible_name = 'Pingoose 42 Info';

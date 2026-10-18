@@ -197,7 +197,7 @@
 .pingoose-light .pingoose-chat-status-err { color: #c92c36; }
 .pingoose-light .pingoose-chat-chip-active { background-color: rgba(22,121,107,0.2); }
 
-.pingoose-chat-columns { spacing: 12px; }
+.pingoose-chat-columns { spacing: 12px; padding-right: 9px; }
 .pingoose-chat-panel { width: 360px; padding: 16px; border-radius: 14px; }
 .pingoose-dark .pingoose-chat-panel { background-color: #23272d; color: #edf0f4; }
 .pingoose-light .pingoose-chat-panel { background-color: #f6f7f9; color: #20252c; }
@@ -209,3 +209,51 @@
 .pingoose-chat-chip-scroll StScrollBar { min-height: 8px; margin-top: 4px; }
 
 .pingoose-blocked-scroll { max-height: 110px; }
+
+/* Bundled artwork is independent of the desktop icon theme. */
+.pingoose-panel-penguin { icon-size: 20px; }
+.pingoose-panel-brand { icon-size: 18px; padding: 2px; border-radius: 4px; background-color: #f5f7fa; }
+
+.pingoose-service-panel { width: 300px; spacing: 12px; }
+.pingoose-service-scroll { max-height: 440px; }
+.pingoose-service-cards { spacing: 12px; padding-right: 12px; }
+.pingoose-service-card { border-radius: 12px; padding: 12px; background-color: rgba(127,127,127,0.16); }
+.pingoose-service-card:hover, .pingoose-service-card:focus { background-color: rgba(127,127,127,0.3); }
+.pingoose-service-card-content { spacing: 10px; }
+.pingoose-service-picture { width: 250px; height: 100px; border-radius: 8px; background-color: #f5f7fa; color: #263440; }
+.pingoose-service-name { font-weight: bold; }
+
+.pingoose-project-panel { width: 320px; spacing: 10px; }
+.pingoose-project-divider { height: 1px; background-color: rgba(127,127,127,0.35); }
+.pingoose-project-notes-scroll { max-height: 260px; }
+.pingoose-project-note-list { spacing: 8px; }
+.pingoose-project-note { padding: 10px 6px 10px 10px; spacing: 8px; border-radius: 8px; background-color: rgba(127,127,127,0.14); }
+.pingoose-project-note StLabel { max-width: 290px; }
+.pingoose-note-editor-scroll { height: 130px; max-height: 130px; }
+.pingoose-note-editor-scroll StScrollBar { min-width: 8px; }
+.pingoose-note-editor { width: 280px; min-height: 110px; }
+.pingoose-note-editor ClutterText { width: 280px; }
+
+.pingoose-todo-scroll { width: 236px; max-width: 236px; }
+.pingoose-todo-scroll StScrollBar { min-height: 8px; margin-top: 6px; }
+.pingoose-todo-rows { spacing: 8px; }
+.pingoose-todo-row { spacing: 8px; }
+.pingoose-todo-check { width: 24px; height: 26px; padding: 0; font-size: 20px; }
+
+.pingoose-todo-editor-scroll { min-height: 38px; max-height: 130px; }
+.pingoose-todo-editor-scroll StScrollBar { min-width: 8px; }
+.pingoose-note-body-scroll { max-height: 150px; }
+.pingoose-note-body { width: 272px; }
+
+.pingoose-note-options { width: 22px; height: 26px; padding: 0; font-size: 22px; border-radius: 6px; }
+.pingoose-note-options:hover { background-color: rgba(127,127,127,0.25); }
+
+/* The shared popup only hosts the columns; each column paints its own bounds. */
+.pingoose-panel-host {
+    -arrow-background-color: transparent;
+    -arrow-border-color: transparent;
+    -arrow-border-width: 0;
+    background-color: transparent;
+    box-shadow: none;
+}
+.pingoose-main-panel { border-radius: 14px; }

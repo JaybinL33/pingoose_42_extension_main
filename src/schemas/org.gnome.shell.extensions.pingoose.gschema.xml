@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
+    <key name="reset-request" type="s"><default>''</default><summary>Pending full reset request</summary></key>
+    <key name="reset-status" type="s"><default>''</default><summary>Full reset progress</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>
       <default>'dark'</default>
@@ -12,6 +14,10 @@
       <summary>Number of screen-edge pulses per notification</summary>
       <description>Zero disables the effect. Pulses start at least one second apart.</description>
     </key>
+    <key name="section-order" type="as">
+      <default>['profile', 'overview', 'slots', 'evaluations', 'agenda', 'notifications', 'chat', 'services']</default>
+      <summary>Main page section order</summary>
+    </key>
     <key name="show-profile" type="b"><default>true</default><summary>Show profile on the main page</summary></key>
     <key name="show-projects" type="b"><default>true</default><summary>Show projects on the main page</summary></key>
     <key name="show-logtime" type="b"><default>true</default><summary>Show logtime on the main page</summary></key>
@@ -22,5 +28,13 @@
     <key name="chat-enabled" type="b"><default>true</default><summary>Enable cluster chat sending and receiving</summary></key>
     <key name="show-chat" type="b"><default>true</default><summary>Show Cluster Chat button and panel</summary></key>
     <key name="show-slots" type="b"><default>true</default><summary>Show Evaluation Slots</summary></key>
+    <key name="service-enabled" type="b"><default>true</default><summary>Enable 42 Services</summary></key>
+    <key name="show-services" type="b"><default>true</default><summary>Show 42 Services button and panel</summary></key>
+    <key name="service-sites" type="s"><default>''</default><summary>Custom website catalogue (empty uses built-in defaults)</summary></key>
+    <key name="project-default-tab" type="s">
+      <choices><choice value="todo"/><choice value="note"/></choices><default>'todo'</default>
+      <summary>First tab when opening project notes</summary>
+    </key>
+    <key name="project-open-direct" type="b"><default>false</default><summary>Open project website instead of notes panel</summary></key>
   </schema>
 </schemalist>

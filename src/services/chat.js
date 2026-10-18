@@ -43,6 +43,8 @@ var ChatService = class ChatService {
         this._peers = new Map();
         this._cancel = new Gio.Cancellable();
         this._connections = 0;
+        this._streams = new Map();
+        this._rate = {time: 0, count: 0};
         this._destroyed = false;
     }
 
@@ -95,7 +97,7 @@ var ChatService = class ChatService {
     open(input) {
         if (!SEAT.test(String(input ?? '').trim())) return null;
         const target = normalizePeer(input);
-        if (!target || this.isBlocked(target.key)) return null;
+        if (!target || this.isBlocked(target.key) || (!this._peers.has(target.key) && this._peers.size >= 64)) return null;
         const peer = this._peer(target.key, target.host);
         if (!peer.connections.length && !peer.connecting) this._connect(peer);
         this.emit('peer-changed', peer.key);
@@ -105,7 +107,7 @@ var ChatService = class ChatService {
     send(key, text) {
         const peer = this._peers.get(key);
         text = String(text ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, MAX_LINE);
-        if (!peer || !text || this.isBlocked(peer.key)) return false;
+        if (!peer || !text || peer.queue.length >= 32 || this.isBlocked(peer.key)) return false;
         peer.queue.push(text);
         this._record(peer, 'out', text);
         if (peer.connections.length) this._flush(peer);
@@ -134,6 +136,7 @@ var ChatService = class ChatService {
         for (const peer of this._peers.values()) {
             for (const conn of peer.connections) this._closeStream(conn);
         }
+        for (const conn of [...this._streams.keys()]) this._closeStream(conn);
         this._peers.clear();
         this._stopService();
         this.disconnectAll();
@@ -156,6 +159,10 @@ var ChatService = class ChatService {
         if (!peer) {
             peer = {key, host, connections: [], queue: [], writing: false, connecting: false,
                 history: [], unread: 0, activity: Date.now()};
+            if (this._peers.size >= 64) {
+                const idle = [...this._peers.values()].find(value => !value.connections.length && !value.connecting);
+                if (idle) this.close(idle.key);
+            }
             this._peers.set(key, peer);
         } else if (host && !peer.host) {
             peer.host = host;
@@ -179,10 +186,12 @@ var ChatService = class ChatService {
 
     _connect(peer) {
         if (!peer.host || this._connections >= MAX_CONNECTIONS) return;
+        this._connections++; // Reserve capacity while the connection is pending.
         peer.connecting = true;
         this.emit('peer-changed', peer.key);
         const client = new Gio.SocketClient({timeout: 5});
         client.connect_to_host_async(peer.host, this.port, this._cancel, (_client, result) => {
+            this._connections--;
             let conn = null, error = null;
             try { conn = client.connect_to_host_finish(result); } catch (e) { error = e; }
             if (this._destroyed) {
@@ -213,6 +222,13 @@ var ChatService = class ChatService {
             return;
         }
         this._connections++;
+        const timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 15, () => {
+            this._streams.delete(conn);
+            this._connections--;
+            try { conn.close(null); } catch (_) {}
+            return GLib.SOURCE_REMOVE;
+        });
+        this._streams.set(conn, timeout);
         let address;
         try { address = conn.get_remote_address().get_address(); } catch (_) {
             this._connections--;
@@ -221,7 +237,8 @@ var ChatService = class ChatService {
         }
         const ip = address.to_string();
         const admit = name => {
-            if (this._destroyed || this.isBlocked(name ?? ip)) {
+            if (!this._streams.has(conn)) return;
+            if (this._destroyed || this.isBlocked(name ?? ip) || (!this._peers.has(peerKey(name ?? ip)) && this._peers.size >= 64)) {
                 this._connections--;
                 this._closeStream(conn);
                 return;
@@ -238,6 +255,7 @@ var ChatService = class ChatService {
         Gio.Resolver.get_default().lookup_by_address_async(address, this._cancel, (resolver, result) => {
             let name = null;
             try { name = resolver.lookup_by_address_finish(result).toLowerCase().replace(/\.$/, ''); } catch (_) { /* No PTR. */ }
+            if (!this._streams.has(conn)) return;
             if (this._destroyed) {
                 this._closeStream(conn);
                 return;
@@ -249,6 +267,7 @@ var ChatService = class ChatService {
                 let pending = seats.length;
                 let blocked = this._blocked.has(ip) || [...this._blocked].some(rule => /^c[0-9]+(?:r[0-9]+)?$/.test(rule));
                 const finish = () => {
+                    if (!this._streams.has(conn)) return;
                     if (blocked || this._destroyed) { this._connections--; this._closeStream(conn); }
                     else admit(null);
                 };
@@ -281,23 +300,41 @@ var ChatService = class ChatService {
         this._flush(peer);
     }
 
-    _read(peer, conn, input) {
-        input.read_line_async(GLib.PRIORITY_DEFAULT, this._cancel, (stream, result) => {
-            let line = null, skip = false;
-            try {
-                [line] = stream.read_line_finish_utf8(result);
-            } catch (e) {
-                // Invalid UTF-8 consumes only that line; anything else ends the connection.
-                skip = e.matches?.(GLib.convert_error_quark(), GLib.ConvertError.ILLEGAL_SEQUENCE) ?? false;
+    _read(peer, conn, input, pending = []) {
+        if (this._destroyed || !peer.connections.includes(conn)) return;
+        const old = this._streams.get(conn);
+        if (old) GLib.source_remove(old);
+        const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+            this._streams.delete(conn);
+            this._drop(peer, conn);
+            return GLib.SOURCE_REMOVE;
+        });
+        this._streams.set(conn, timer);
+        input.read_bytes_async(1024, GLib.PRIORITY_DEFAULT, this._cancel, (stream, result) => {
+            let bytes;
+            try { bytes = stream.read_bytes_finish(result).get_data(); } catch (_) { this._drop(peer, conn); return; }
+            if (this._destroyed || !peer.connections.includes(conn)) return;
+            if (!bytes?.length) { this._drop(peer, conn); return; }
+            for (const byte of bytes) {
+                if (byte !== 10) {
+                    pending.push(byte);
+                    if (pending.length > MAX_LINE) { this._drop(peer, conn); return; }
+                    continue;
+                }
+                const time = GLib.get_monotonic_time() / 1000000;
+                peer.rate ||= {time, count: 0};
+                for (const rate of [peer.rate, this._rate]) {
+                    if (time - rate.time >= 10) { rate.time = time; rate.count = 0; }
+                    rate.count++;
+                }
+                if (peer.rate.count > 20 || this._rate.count > 100) { this._drop(peer, conn); return; }
+                let text;
+                try { text = ByteArray.toString(Uint8Array.from(pending)).replace(/\r$/, ''); }
+                catch (_) { this._drop(peer, conn); return; }
+                pending = [];
+                if (text.trim()) this._record(peer, 'in', text);
             }
-            if (this._destroyed) return;
-            if (line === null && !skip) {
-                this._drop(peer, conn);
-                return;
-            }
-            const text = (line ?? '').replace(/\r$/, '').slice(0, MAX_LINE);
-            if (text.trim() && this._alive(peer)) this._record(peer, 'in', text);
-            this._read(peer, conn, stream);
+            this._read(peer, conn, stream, pending);
         });
     }
 
@@ -336,6 +373,9 @@ var ChatService = class ChatService {
     }
 
     _closeStream(conn) {
+        const timer = this._streams.get(conn);
+        if (timer) GLib.source_remove(timer);
+        this._streams.delete(conn);
         try { conn.close(null); } catch (_) { /* Already closed. */ }
     }
 };

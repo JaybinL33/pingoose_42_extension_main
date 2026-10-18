@@ -59,14 +59,12 @@ var Controller = class Controller {
             this._settingsVisible = false;
             this._syncOptionalSections();
         };
-        const sync = () => {
-            const theme = this._settings.get_string('theme');
-            indicator.menu.actor.remove_style_class_name('pingoose-dark');
-            indicator.menu.actor.remove_style_class_name('pingoose-light');
-            indicator.menu.actor.add_style_class_name(`pingoose-${theme}`);
-
-        };
-        this._themeChanged = this._settings.connect('changed', () => { sync(); showMain(); });
+        const sync = () => this._applyTheme();
+        this._themeChanged = this._settings.connect('changed', (_settings, key) => {
+            if (key === 'reset-request') { this._requestFullReset(); return; }
+            if (key === 'reset-status' || this._resetting) return;
+            sync(); showMain();
+        });
         sync();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
             if (!open) settings.close();
@@ -80,6 +78,13 @@ var Controller = class Controller {
         indicator.onLoginStateChanged = () => { settings.close(); showMain(); };
         gear.connect('clicked', () => settings.toggle());
         showMain();
+    }
+
+    _applyTheme() {
+        const actor=this._indicator.menu.actor;
+        actor.remove_style_class_name('pingoose-dark');
+        actor.remove_style_class_name('pingoose-light');
+        actor.add_style_class_name(`pingoose-${this._settings.get_string('theme')}`);
     }
 
     _confirmIntraLogout() {
