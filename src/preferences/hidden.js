@@ -9,5 +9,13 @@ function build(settings){
         toggle.connect('notify::active',()=>settings.set_boolean(key,toggle.active));
         Me.imports.preferences.common.row(box,label,toggle);
     }
+    const offset=new Gtk.SpinButton({
+        adjustment:new Gtk.Adjustment({lower:-10080,upper:10080,step_increment:1,page_increment:10}),
+        numeric:true,digits:0,valign:Gtk.Align.CENTER,
+    });
+    offset.set_value(settings.get_int('dev-evaluation-offset-minutes'));
+    offset.connect('value-changed',()=>settings.set_int('dev-evaluation-offset-minutes',offset.get_value_as_int()));
+    Me.imports.preferences.common.row(box,'Test Evaluation Start Offset (minutes)',offset);
+    box.append(new Gtk.Label({label:'Negative: started minutes ago. Positive: starts in minutes. Applies to newly created test evaluations.',wrap:true,xalign:0}));
     return box;
 }

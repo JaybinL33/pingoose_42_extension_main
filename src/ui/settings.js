@@ -50,7 +50,7 @@ var Controller = class Controller {
             id:`test:${GLib.get_monotonic_time()}`,test:true,body:'Test notification'}),row=>{
                 if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
                 this._evaluations=[...this._evaluations,row];this._renderEvaluations();settings.close();
-            });
+            },this._settings);
         const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
         syncDev();
         settings.addAction('Logout Intra', () => this._confirmIntraLogout());
