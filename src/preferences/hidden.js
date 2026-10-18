@@ -2,7 +2,7 @@ const {Gtk,Gio}=imports.gi;
 const Me=imports.misc.extensionUtils.getCurrentExtension();
 function build(settings){
     const box=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:18});
-    box.append(new Gtk.Label({label:'Experimental features. General chat requires both clients to enable it. Evaluation chat remains available only during the final 14m 50s before the evaluation starts.',wrap:true,xalign:0}));
+    box.append(new Gtk.Label({label:'Experimental features. General chat requires both clients to enable it. Evaluation details are requested 15 minutes before the start, then every 5 seconds until the counterpart is confirmed. Evaluation chat is available only during those final 15 minutes.',wrap:true,xalign:0}));
     for(const [key,label] of [['hidden-cluster-chat','Cluster Chat'],['hidden-auto-slots','Auto Open Evaluation Slots'],['hidden-dev-options','Add Developer Options']]){
         const toggle=new Gtk.Switch({active:Me.imports.models.featureFlags.enabled(settings,key),valign:Gtk.Align.CENTER});
         box.connect('map',()=>{toggle.active=Me.imports.models.featureFlags.enabled(settings,key);});

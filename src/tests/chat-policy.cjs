@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const P=require('../models/chatPolicy.js');
 const now=Date.parse('2026-10-18T00:00:00Z');
-const row={id:'42',begin:new Date(now+890000).toISOString(),users:['peer'],seats:{peer:'c2r3s4'},chatConfirmedAt:{peer:now}};
+const row={id:'42',begin:new Date(now+899000).toISOString(),users:['peer'],seats:{peer:'c2r3s4'},chatConfirmedAt:{peer:now}};
 const grants=P.grantsFrom([row],now);
 assert.equal(grants.length,1);
 assert.equal(P.grantsFrom([row],now-1).length,0,'before window or future confirmation');
@@ -15,14 +15,14 @@ assert(!P.accepts(policy,'c2r3s4',hello,now-1),'clock moved before allowed windo
 assert(!P.accepts(policy,'c2r3s5',hello,now));
 assert(!P.accepts(policy,'c2r3s4',{...hello,login:'stranger'},now));
 assert(!P.accepts(policy,'c2r3s4',{...hello,scope:'43'},now));
-assert(!P.accepts(policy,'c2r3s4',hello,now+890000),'closed exactly at start');
+assert(!P.accepts(policy,'c2r3s4',hello,now+899000),'closed exactly at start');
 assert(!P.accepts(policy,'c2r3s4',{...hello,scope:'general',general:true},now));
 assert(!P.accepts({...policy,general:true},'c2r3s4',{...hello,scope:'general',general:false},now));
 assert(P.accepts({...policy,general:true},'c2r3s4',{...hello,scope:'general',general:true},now));
 assert(!P.accepts({...policy,active:false,general:true},'c2r3s4',hello,now));
 assert(!P.accepts(policy,'c2r3s4','legacy plaintext',now));
-console.log('PASS: 14m50s window, fresh confirmation, seat/login/evaluation matching, expiry, mutual general opt-in and legacy rejection');
+console.log('PASS: 15m window, fresh confirmation, seat/login/evaluation matching, expiry, mutual general opt-in and legacy rejection');
 const selfRow={...row,devTest:true,devSelf:true};
 assert.equal(P.grantsFrom([selfRow],now,'someone-else').length,0);
 assert.equal(P.grantsFrom([selfRow],now,'peer')[0].testSelf,true);
-assert.equal(P.grantsFrom([selfRow],now+890000,'peer').length,0);
+assert.equal(P.grantsFrom([selfRow],now+899000,'peer').length,0);

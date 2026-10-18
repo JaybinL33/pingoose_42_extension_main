@@ -27,7 +27,7 @@ var Controller = class Controller {
             if (actor.text !== text) actor.text = text;
         }
         this._syncOptionalSections();
-        const key = JSON.stringify([rows, this._feedback, rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=890000])]);
+        const key = JSON.stringify([rows, this._feedback, rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=899000])]);
         if (key === this._evaluationKey) return;
         this._evaluationKey = key;
         const section = this._indicator.evaluations;

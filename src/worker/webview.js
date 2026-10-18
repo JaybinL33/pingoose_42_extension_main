@@ -380,7 +380,7 @@ class Worker {
             for (const row of rows) if (!plan.state.dismissed.includes(row.id)) {
                 const cached=retained.get(row.id);
                 const remaining=Date.parse(row.begin)-Date.now();
-                const users=!row.users.length && cached?.begin===row.begin && remaining>0 && remaining<=890000
+                const users=!row.users.length && cached?.begin===row.begin && remaining>0 && remaining<=899000
                     ? cached.users : row.users;
                 retained.set(row.id, {...cached,...row,users});
             }
@@ -398,7 +398,7 @@ class Worker {
             const identityChanged = previous && row.users.length && JSON.stringify(previous.users) !== JSON.stringify(row.users);
             const remaining = Date.parse(row.begin) - Date.now();
             const reminderKey = `${row.id}:${row.begin}:${row.users.join(',')}`;
-            if ((remaining > 0 && remaining <= 890000 || identityChanged) && !this.evaluationState.dismissed.includes(row.id) && !this.evaluationState.reminders.includes(reminderKey)) {
+            if ((remaining > 0 && remaining <= 899000 || identityChanged) && !this.evaluationState.dismissed.includes(row.id) && !this.evaluationState.reminders.includes(reminderKey)) {
                 {
                     this.evaluationState.reminders = [...this.evaluationState.reminders, reminderKey].slice(-2000);
                     this.writeState(this.evaluationState);
@@ -409,21 +409,49 @@ class Worker {
             }
         }
         this.counterpartChecks ||= new Map();
-        for (const row of rows.filter(row => !this.evaluationState.dismissed.includes(row.id))) for (const login of row.users) {
+        for (const row of this.evaluationState.evaluations) {
             const remaining=Date.parse(row.begin)-Date.now();
-            const key = `${row.id}:${login}:${remaining>0 && remaining<=890000?'chat':'early'}`;
-            if (now() >= (this.counterpartChecks.get(key) || 0)) {
-                this.counterpartChecks.set(key, now() + 300);
-                this.lookupSeat(row, login, identity);
+            if(remaining<=0 || remaining>899000)continue;
+            for(const login of row.users || []){
+                if(this.counterpartReady(row,login))continue;
+                const key=`${row.id}:${row.begin}:${login}`;
+                if(now()>=(this.counterpartChecks.get(key)||0)){
+                    this.counterpartChecks.set(key,Infinity);
+                    this.lookupSeat(row,login,identity);
+                }
             }
         }
         this.backoff = 20;
-        this.nextPoll = Math.max(now() + 10, this.notBefore);
+        this.scheduleEvaluationPoll();
         if (this.notBefore > now() + 10)
             status('retry-wait', {retryAfter: Math.ceil(this.notBefore - now())});
         else
             status('watching', {login: identity.login, count: rows.length});
         return true;
+    }
+
+    counterpartReady(row,login) {
+        return /^c\d+r\d+s\d+$/i.test(row.seats?.[login] || '') &&
+            row.chatConfirmedAt?.[login]>=Date.parse(row.begin)-899000;
+    }
+
+    // Allow one second for the server to publish the match at the 15-minute boundary.
+    scheduleEvaluationPoll() {
+        let delay=10000;
+        const time=Date.now();
+        for(const row of this.evaluationState?.evaluations || []){
+            const remaining=Date.parse(row.begin)-time;
+            if(remaining>899000)delay=Math.min(delay,remaining-899000);
+            else if(remaining>0 && (!row.users?.length || row.users.some(login=>!this.counterpartReady(row,login))))
+                delay=Math.min(delay,5000);
+        }
+        this.nextPoll=Math.max(now()+delay/1000,this.notBefore);
+        if(this.evaluationPollTimer)GLib.source_remove(this.evaluationPollTimer);
+        this.evaluationPollTimer=GLib.timeout_add(GLib.PRIORITY_DEFAULT,Math.max(1,Math.ceil((this.nextPoll-now())*1000)),()=>{
+            this.evaluationPollTimer=0;
+            if(!stopped && this.auth && !this.signedOut && !this.pending && now()>=this.notBefore && now()>=this.nextPoll)this.poll();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     publishEvaluations() {
@@ -476,11 +504,12 @@ class Worker {
             if (finished) return;
             finished = true;
             view.destroy();
+            this.counterpartChecks?.set(`${row.id}:${row.begin}:${login}`,now());
             if (stopped || this.auth !== identity) return;
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id && item.begin === row.begin);
             // Keep a confirmed pre-start seat through transient lookup failures.
             const cached=stored && Date.parse(stored.begin)>Date.now() &&
-                stored.chatConfirmedAt?.[login]>=Date.parse(stored.begin)-890000 ? stored.seats?.[login] : null;
+                stored.chatConfirmedAt?.[login]>=Date.parse(stored.begin)-899000 ? stored.seats?.[login] : null;
             row.seats = {...row.seats, [login]: seat || cached || 'Unavailable'};
             const seatNotice=`${row.id}:seat:${row.begin}:${login}:${seat}`;
             const notify=seat && stored && !this.evaluationState.reminders.includes(seatNotice);
@@ -493,15 +522,15 @@ class Worker {
             if (notify) emit({type: 'notification', id: `seat:${row.id}:${login}:${seat}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
         };
         let attempts = 0;
-        const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+        const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             if (finished) return GLib.SOURCE_REMOVE;
-            if (++attempts >= 10 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
+            if (++attempts >= 5 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
             // Seat lookup is deliberately conservative: no arbitrary page text is reported.
             view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length ? '' : e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`, 'pingoose-seat', this.cancel, (page, result) => {
                 try {
                     const seat = JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
                     if (seat) foundSeat = seat;
-                    if (foundSeat && (avatarSaved || attempts >= 5)) { GLib.source_remove(timer); finish(foundSeat); }
+                    if (foundSeat && (avatarSaved || attempts >= 4)) { GLib.source_remove(timer); finish(foundSeat); }
                 } catch (_) {}
             });
             return GLib.SOURCE_CONTINUE;
@@ -652,6 +681,8 @@ class Worker {
         this.closeServices();
         for (const window of this.projectWindows || []) window.destroy();
         if (this.clearingLogin) { complete?.(false); return; }
+        if(this.evaluationPollTimer)GLib.source_remove(this.evaluationPollTimer);
+        this.evaluationPollTimer=0;
         this.refreshPart('logout',false);
         this.signedOut = true;
         this.clearingLogin = true;
@@ -856,6 +887,8 @@ class Worker {
         this.cancel.cancel();
         this.pending?.cancel();
         this.session.abort();
+        if(this.evaluationPollTimer)GLib.source_remove(this.evaluationPollTimer);
+        this.evaluationPollTimer=0;
         if (this.timer) GLib.source_remove(this.timer);
         this.view.stop_loading();
         this.window.destroy();
