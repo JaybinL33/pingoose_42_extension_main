@@ -189,7 +189,7 @@ class Worker {
     }
 
     readProfile() {
-        if (this.profileReading || !profileURI(this.view.get_uri())) return;
+        if (this.profileReading || this.view.is_loading || !profileURI(this.view.get_uri())) return;
         this.nextProfileRead = now() + 2;
         this.profileReading = true;
         const identity = this.auth;

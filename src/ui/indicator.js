@@ -274,6 +274,19 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
     updateProfile(data) {
         if (!this.profileLoadStarted) this.profileLoadStarted = GLib.get_monotonic_time();
         const previous = this.lastProfile?.login === data.login ? this.lastProfile : {};
+        // A reloading Intra page briefly exposes 0% before its real level data arrives.
+        // Confirm regressions across stable samples; a level-up to 0% remains immediate.
+        const regressed=Number.isFinite(previous.level) && Number.isFinite(previous.progress) &&
+            Number.isFinite(data.level) && Number.isFinite(data.progress) &&
+            (data.level<previous.level || (data.level===previous.level && data.progress<previous.progress));
+        if(regressed){
+            const key=JSON.stringify([data.login,data.level,data.progress]);
+            const now=GLib.get_monotonic_time();
+            if(this._pendingExperience?.key!==key)this._pendingExperience={key,since:now};
+            if(now-this._pendingExperience.since<5000000)data={...data,level:previous.level,progress:previous.progress};
+            else this._pendingExperience=null;
+        }else this._pendingExperience=null;
+
         const merged = {...previous};
         for (const [key, value] of Object.entries(data)) {
             if (value !== null && value !== undefined && value !== '') merged[key] = value;
@@ -292,7 +305,8 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.profileLogin.text = `@${data.login}`;
         this.profileLevel.text = `Lv.${level ?? '—'}`;
         this.profilePercent.text = `(${progress ?? '—'}%)`;
-        this.profileProgress.width = 90 * (progress ?? 0) / 100;
+        const progressWidth=90 * (progress ?? 0) / 100;
+        if(this.profileProgress.width!==progressWidth)this.profileProgress.width=progressWidth;
         this.profilePoints.text = `Ev.P ${number(data.points, 1000000) ?? '—'}`;
         this.profilePace.text = `Pace ${number(data.pace, 1000) ?? '—'} ·`;
         this.deadlineCaption.text = ({milestone: 'Milestone Deadline :', ultimate: 'Ultimate Deadline :',

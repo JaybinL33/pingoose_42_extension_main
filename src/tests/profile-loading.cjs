@@ -41,3 +41,20 @@ cached.updateProfile({login:'fixture',name:'',level:null,progress:null,points:nu
 assert.equal(projectUpdates,1);assert.equal(cached.lastProfile.level,4);assert.equal(cached.profileDeadline.text,'2026-10-18');
 cached.updateProfile({...complete,progress:51,projects:[]});assert.equal(cached.profilePercent.text,'(51%)');assert.equal(cached.lastProfile.projects.length,0);
 console.log('PASS: unchanged and partial profile snapshots do not repaint; changed progress and confirmed empty projects update');
+
+cached.updateProfile({...complete,progress:0});
+assert.equal(cached.lastProfile.progress,51,'transient zero must retain cached experience');
+time+=2000000;cached.updateProfile({...complete,progress:51});
+assert.equal(cached.lastProfile.progress,51);
+cached.updateProfile({...complete,level:5,progress:0});
+assert.equal(cached.lastProfile.level,5,'level-up is immediate');assert.equal(cached.lastProfile.progress,0);
+cached.updateProfile({...complete,level:5,progress:60});
+cached.updateProfile({...complete,level:5,progress:40});
+assert.equal(cached.lastProfile.progress,60);
+time+=5000000;cached.updateProfile({...complete,level:5,progress:40});
+assert.equal(cached.lastProfile.progress,40,'confirmed correction must eventually apply');
+let widthWrites=0,width=cached.profileProgress.width;
+Object.defineProperty(cached.profileProgress,'width',{get:()=>width,set:value=>{widthWrites++;width=value;}});
+cached.updateProfile({...complete,level:5,progress:40,points:99});
+assert.equal(widthWrites,0,'unrelated changes must not reset the experience width');
+console.log('PASS: transient zero ignored, level-up accepted, stable corrections accepted and unchanged bar untouched');
