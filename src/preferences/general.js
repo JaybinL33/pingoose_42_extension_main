@@ -9,6 +9,22 @@ function build(settings) {
     const flash = Gtk.SpinButton.new_with_range(0,5,1);
     settings.bind('flash-count',flash,'value',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Screen flash (0 = Off)',flash);
+    const flags=imports.misc.extensionUtils.getCurrentExtension().imports.models.featureFlags;
+    const code=new Gtk.Entry({placeholder_text:'Enter an access phrase',hexpand:true});
+    Common.row(box,'Advanced access',code);
+    const unlockStatus=new Gtk.Label({label:flags.unlocked(settings)?'Hidden Options unlocked.':'',xalign:0});
+    box.append(unlockStatus);
+    code.connect('changed',()=>{
+        if(!flags.unlock(settings,code.get_text()))return;
+        code.set_text('');
+        unlockStatus.label='Hidden Options unlocked.';
+        const dialog=new Gtk.MessageDialog({transient_for:box.get_root(),modal:true,
+            message_type:Gtk.MessageType.INFO,buttons:Gtk.ButtonsType.OK,
+            text:'Hidden Options unlocked',
+            secondary_text:'Open the Hidden Options tab to enable advanced features.'});
+        dialog.connect('response',()=>dialog.destroy());
+        dialog.present();
+    });
     box.append(new Gtk.Separator());
     box.append(new Gtk.Label({label:'Restore defaults, delete all local extension data and log out of Intra.',xalign:0,wrap:true}));
     const reset = new Gtk.Button({label:'Reset All Data'}); box.append(reset);

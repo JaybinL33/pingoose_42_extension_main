@@ -6,6 +6,7 @@
     <key name="hidden-cluster-chat" type="b"><default>false</default><summary>Allow general cluster chat</summary></key>
     <key name="hidden-auto-slots" type="b"><default>false</default><summary>Allow automatic slot creation</summary></key>
     <key name="dev-evaluation-offset-minutes" type="i"><range min="-10080" max="10080"/><default>-1</default><summary>Test evaluation start offset in minutes (negative: past, positive: future)</summary></key>
+    <key name="hidden-options-unlocked" type="b"><default>false</default><summary>Hidden Options unlocked on this computer</summary></key>
     <key name="hidden-dev-options" type="b"><default>false</default><summary>Show developer actions</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>

@@ -11,10 +11,25 @@ function buildPrefsWidget() {
         page.margin_top = page.margin_bottom = page.margin_start = page.margin_end = 24;
         tabs.append_page(page, new Gtk.Label({label:title}));
     }
-    if(ExtensionUtils.getCurrentExtension().imports.models.featureFlags.HIDDEN_OPTIONS){
-        const hidden=preferences.hidden.build(settings);
-        hidden.margin_top=hidden.margin_bottom=hidden.margin_start=hidden.margin_end=24;
-        tabs.append_page(hidden,new Gtk.Label({label:'Hidden Options'}));
-    }
+    const flags=ExtensionUtils.getCurrentExtension().imports.models.featureFlags;
+    let hidden=null,signal=0;
+    const syncHidden=()=>{
+        if(flags.unlocked(settings)){
+            if(hidden)return;
+            hidden=preferences.hidden.build(settings);
+            hidden.margin_top=hidden.margin_bottom=hidden.margin_start=hidden.margin_end=24;
+            tabs.append_page(hidden,new Gtk.Label({label:'Hidden Options'}));
+            hidden.show();
+        }else if(hidden){
+            tabs.remove_page(tabs.page_num(hidden));
+            hidden=null;
+        }
+    };
+    tabs.connect('map',()=>{
+        if(!signal)signal=settings.connect('changed::hidden-options-unlocked',syncHidden);
+        syncHidden();
+    });
+    tabs.connect('unmap',()=>{if(signal)settings.disconnect(signal);signal=0;});
+    syncHidden();
     return tabs;
 }
