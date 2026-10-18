@@ -47,6 +47,7 @@ class Pingoose {
         this._agenda = [];
         this._evaluations = [];
         this._feedback = {};
+        this._restoreCardState();
         this._renderEvaluations();
         this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
@@ -224,12 +225,6 @@ class Pingoose {
         }
         if (message.type === 'evaluation-dismissed' && typeof message.id === 'string') {
             const id = message.id;
-            this._notifications = this._notifications.filter(item => item.id !== `intrapy:${id}` &&
-                !['seat', 'reminder', 'rescheduled'].some(prefix => item.id.startsWith(`${prefix}:${id}:`)));
-            for (const key of this._unreadIds || []) {
-                if (key === `intrapy:${id}` || ['seat', 'reminder', 'rescheduled'].some(prefix => key.startsWith(`${prefix}:${id}:`)))
-                    this._unreadIds.delete(key);
-            }
             delete this._feedback[id];
             this._renderCards();
             return;
@@ -279,7 +274,7 @@ class Pingoose {
             else if (['authenticated', 'watching'].includes(message.state)) {
                 const wasLoginOnly = this._indicator.loginOnly;
                 this._indicator.setLoginOnly(false);
-                if (wasLoginOnly) this._renderCards();
+                if (wasLoginOnly) {this._restoreCardState?.();this._renderCards();this._renderEvaluations();}
             }
             this._indicator.status.label.text = message.state;
             return;
@@ -299,7 +294,7 @@ class Pingoose {
         this._notifications.unshift({id: message.id, body: message.body,
             test: message.test === true, category: message.category,
             unread: !this._indicator.menu.isOpen || this._settingsVisible, time: GLib.DateTime.new_now_local().format('%H:%M')});
-        this._notifications.length = Math.min(this._notifications.length, 5);
+        this._saveCardState?.();
         this._renderCards();
         this._showBanner(message);
         this._flashScreen();

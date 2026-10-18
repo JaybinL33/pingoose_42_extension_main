@@ -123,6 +123,7 @@ var Controller = class Controller {
                         if (!row.devTest) { this._send(`feedback:${row.id}`); return; }
                         this._evaluations = this._evaluations.filter(item => item.id !== row.id);
                         delete this._feedback[row.id];
+                        this._saveCardState?.();
                         this._renderEvaluations();
                     });
                     button('Not yet', () => step(evaluator ? null : 'later'));

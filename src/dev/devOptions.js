@@ -8,7 +8,7 @@ function addOptions(settings, sendTest, addEvaluation, preferences) {
     menu.menu.addMenuItem(test);
     const evaluation = new PopupMenu.PopupMenuItem('Create Test Evaluation');
     evaluation.activate = () => addEvaluation({
-        id: `dev-evaluation-${++evaluationSequence}`, devTest: true, project: `Test Evaluation ${evaluationSequence}`, slug: 'libft',
+        id: `dev-evaluation-${Date.now()}-${++evaluationSequence}`, devTest: true, project: `Test Evaluation ${evaluationSequence}`, slug: 'libft',
         kind: preferences?.get_string('dev-evaluation-role') || 'evaluated', users: ['test-user'], seats: {'test-user': 'Test seat'},
         begin: new Date(Date.now() + (preferences ? preferences.get_int('dev-evaluation-offset-minutes') : -1) * 60000).toISOString(),
     });

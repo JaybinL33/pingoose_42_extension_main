@@ -59,7 +59,7 @@ var Controller = class Controller {
                 const seat=String(profile?.location || GLib.get_host_name()).split('.')[0].toLowerCase();
                 row.users=[login];row.seats={[login]:/^c\d+r\d+s\d+$/.test(seat)?seat:'Unavailable'};
                 row.devSelf=true;row.avatars=[login];row.chatConfirmedAt={[login]:Date.now()};
-                this._evaluations=[...this._evaluations,row];this._renderEvaluations();settings.close();
+                this._evaluations=[...this._evaluations,row];this._saveCardState();this._renderEvaluations();settings.close();
             },this._settings);
         const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
         syncDev();
@@ -87,6 +87,7 @@ var Controller = class Controller {
                 settings.close(); showMain();
                 this._unreadIds.clear();
                 for (const notification of this._notifications) notification.unread = false;
+                this._saveCardState();
                 this._updatePanelLabel();
             }
         });

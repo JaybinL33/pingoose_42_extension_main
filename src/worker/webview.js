@@ -653,7 +653,6 @@ class Worker {
         this.slotsService?.close();
         this.slotsService = null;
         this.evaluationState = null;
-        this.cleanupCounterpartImages();
         this.pending?.cancel();
         this.session.abort();
         this.nextPoll = this.reloadAt = Infinity;
@@ -667,7 +666,7 @@ class Worker {
         for (const marker of [this.signedOutFile, this.webLoginOnlyFile])
             marker.replace_contents(ByteArray.fromString('1'), null, false,
                 Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-        for (const name of ['session.json', 'intrapy-evaluations.json', 'profile-avatar', 'profile-diagnostics.json', 'profile-image-status.json']) {
+        for (const name of ['session.json', 'profile-avatar', 'profile-diagnostics.json', 'profile-image-status.json']) {
             try { Gio.File.new_for_path(`${this.stateDirectory}/${name}`).delete(null); } catch (_) {}
         }
         emit({type: 'signed-out'});

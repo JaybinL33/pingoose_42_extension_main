@@ -22,6 +22,7 @@ var Controller = class Controller {
         try {
             Me.imports.services.resetData.clearAll();
             Me.imports.models.settingsDefaults.restore(this._settings);
+            this._cardArchiveFailed=false;
             this._clearProfile();
             this._servicePanel.render();
             this._settings.set_string('reset-request','');

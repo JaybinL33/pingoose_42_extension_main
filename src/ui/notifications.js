@@ -4,6 +4,28 @@ const MessageTray = imports.ui.messageTray;
 const PopupMenu = imports.ui.popupMenu;
 
 var Controller = class Controller {
+    _saveCardState() {
+        if(this._resetting || this._cardArchiveFailed || this._indicator?.loginOnly)return;
+        try {
+            imports.misc.extensionUtils.getCurrentExtension().imports.services.cardStore.write({
+                notifications:this._notifications,
+                received:[...(this._receivedNotificationIds || [])],
+                tests:(this._evaluations || []).filter(row=>row.devTest),
+            });
+        } catch(error) { logError(error,'Unable to save Pingoose cards'); }
+    }
+
+    _restoreCardState() {
+        try {
+            const data=imports.misc.extensionUtils.getCurrentExtension().imports.services.cardStore.read();
+            if(!data)return;
+            this._notifications=data.notifications;
+            this._receivedNotificationIds=new Set(data.received);
+            this._unreadIds=new Set(data.notifications.filter(row=>row.unread).map(row=>row.id));
+            this._evaluations=[...(this._evaluations || []).filter(row=>!row.devTest),...data.tests];
+        } catch(error) { this._cardArchiveFailed=true;logError(error,'Unable to restore Pingoose cards'); }
+    }
+
     _showBanner(message) {
         if (!this._bannerSource) {
             this._bannerSource = new MessageTray.Source('Pingoose', 'preferences-system-notifications-symbolic');
@@ -95,6 +117,7 @@ var Controller = class Controller {
             dismiss.connect('clicked', () => {
                 this._unreadIds?.delete(notification.id);
                 this._notifications = this._notifications.filter(entry => entry.id !== notification.id);
+                this._saveCardState?.();
                 this._renderCards();
             });
             item.add_child(dismiss);
@@ -117,6 +140,7 @@ var Controller = class Controller {
         clear.connect('clicked', () => {
             this._notifications = [];
             this._unreadIds = new Set();
+            this._saveCardState?.();
             this._renderCards();
         });
         footer.add_child(clear);
