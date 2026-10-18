@@ -700,30 +700,20 @@ class Worker {
     }
 
     command(command) {
-        if (command === 'slots:open-5' || command === 'slots:open-30m') {
+        if (command === 'slots:open-auto' || command === 'slots:open-5' || command === 'slots:open-30m') {
             if (!imports.models.featureFlags.enabled(this.featureSettings,'hidden-auto-slots')) { emit({type:'slots',error:'Automatic slot creation is disabled.'}); return; }
             if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
             this.slotsService ||= new imports.services.slotsService.SlotsService(this.context, allowedURI);
             if (this.slotsService.busy) return;
             const identity = this.auth;
 
-            const now = new Date();
-            const targetMs = now.getTime() + 30 * 60 * 1000;
-            const step = 15 * 60 * 1000;
-            let startMs = Math.ceil(targetMs / step) * step;
-
-            const pad = n => String(n).padStart(2, '0');
-            const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
-
-            const count = command === 'slots:open-5' ? 5 : 1;
-            const payload = [];
-            for (let i = 0; i < count; i++) {
-                payload.push({
-                    begin: fmt(new Date(startMs)),
-                    end: fmt(new Date(startMs + 30 * 60 * 1000))
-                });
-                startMs += 60 * 60 * 1000;
-            }
+            let payload;
+            try {
+                payload=imports.models.slotSchedule.build(Date.now(),
+                    this.featureSettings.get_int('auto-slot-duration-units'),
+                    this.featureSettings.get_int('auto-slot-interval-units'),
+                    command==='slots:open-30m'?1:this.featureSettings.get_int('auto-slot-count'));
+            } catch(error) { emit({type:'slots',error:error.message});return; }
 
             this.slotsService.run('create-5', null, result => {
                 if (!stopped && this.auth?.subject === identity.subject) emit({type: 'slots', ...result});

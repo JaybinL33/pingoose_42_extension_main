@@ -22,7 +22,7 @@ async function slotRequest(action, expected, payload) {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         if (!csrf) throw new Error('Slot session expired. Open Intra and try again.');
         const slotsToCreate = Array.isArray(payload) ? payload : [payload];
-        if(!slotsToCreate.length || slotsToCreate.length>5 || slotsToCreate.some(item=>!item || !Number.isFinite(Date.parse(item.begin)) || Date.parse(item.end)-Date.parse(item.begin)!==1800000))throw new Error('Invalid slot schedule.');
+        if(!slotsToCreate.length || slotsToCreate.length>20 || slotsToCreate.some(item=>!item || !Number.isFinite(Date.parse(item.begin)) || !Number.isFinite(Date.parse(item.end)) || Date.parse(item.end)-Date.parse(item.begin)<900000 || Date.parse(item.end)-Date.parse(item.begin)>14400000 || (Date.parse(item.end)-Date.parse(item.begin))%900000!==0))throw new Error('Invalid slot schedule.');
         let createdCount = 0, skipped=0, failed=0;
         for (const item of slotsToCreate) {
             if(rows.some(row=>Date.parse(row.start)===Date.parse(item.begin) && Date.parse(row.end)===Date.parse(item.end))){skipped++;continue;}

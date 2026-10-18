@@ -146,7 +146,8 @@ var ChatService = class ChatService {
         if (!target || this.isBlocked(target.key) || (!this._peers.has(target.key) && this._peers.size >= 64)) return null;
         if(!this.canOpen(target.key,scope))return null;
         if(this.peer(target.key)?.scope!==scope)this.close(target.key);
-        const peer = this._peer(target.key, target.host);
+        const selfTest=this.policy.grants.find(grant=>grant.testSelf && grant.login===this.policy.login && grant.id===scope && grant.seat===target.key);
+        const peer = this._peer(target.key, selfTest ? '127.0.0.1' : target.host);
         peer.scope=scope;
         if (!peer.connections.length && !peer.connecting) this._connect(peer);
         this.emit('peer-changed', peer.key);
@@ -298,7 +299,8 @@ var ChatService = class ChatService {
             this._attach(peer, conn);
         };
         if (address.get_is_loopback()) {
-            admit('localhost');
+            const selfTest=this.policy.grants.find(grant=>grant.testSelf && grant.login===this.policy.login && grant.expires>Date.now());
+            admit(selfTest?.seat || 'localhost');
             return;
         }
         // Only cluster hosts (or the private network they sit on) may open a chat.

@@ -46,7 +46,7 @@ var ChatPanel = class ChatPanel {
             this._chat.markRead(this._chatActive);
     }
     updateEvaluations(rows) {
-        this._grants=Policy.grantsFrom(rows);
+        this._grants=Policy.grantsFrom(rows.filter(row=>!row.devTest || Flags.enabled(this._settings,'hidden-dev-options')),Date.now(),GLib.get_user_name());
         const expired=this._chat.peers.some(peer=>peer.scope && peer.scope!=='general' &&
             !this._grants.some(grant=>grant.id===peer.scope && grant.seat===peer.key));
         this.sync();

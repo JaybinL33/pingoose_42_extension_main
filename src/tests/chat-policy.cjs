@@ -22,3 +22,7 @@ assert(P.accepts({...policy,general:true},'c2r3s4',{...hello,scope:'general',gen
 assert(!P.accepts({...policy,active:false,general:true},'c2r3s4',hello,now));
 assert(!P.accepts(policy,'c2r3s4','legacy plaintext',now));
 console.log('PASS: 14m50s window, fresh confirmation, seat/login/evaluation matching, expiry, mutual general opt-in and legacy rejection');
+const selfRow={...row,devTest:true,devSelf:true};
+assert.equal(P.grantsFrom([selfRow],now,'someone-else').length,0);
+assert.equal(P.grantsFrom([selfRow],now,'peer')[0].testSelf,true);
+assert.equal(P.grantsFrom([selfRow],now+890000,'peer').length,0);

@@ -49,6 +49,11 @@ var Controller = class Controller {
         const devMenu=Me.imports.dev.devOptions.addOptions(settings,()=>this._message({type:'notification',
             id:`test:${GLib.get_monotonic_time()}`,test:true,body:'Test notification'}),row=>{
                 if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
+                const profile=this._indicator.lastProfile;
+                const login=profile?.login || GLib.get_user_name();
+                const seat=String(profile?.location || GLib.get_host_name()).split('.')[0].toLowerCase();
+                row.users=[login];row.seats={[login]:/^c\d+r\d+s\d+$/.test(seat)?seat:'Unavailable'};
+                row.devSelf=true;row.avatars=[login];row.chatConfirmedAt={[login]:Date.now()};
                 this._evaluations=[...this._evaluations,row];this._renderEvaluations();settings.close();
             },this._settings);
         const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
@@ -65,7 +70,7 @@ var Controller = class Controller {
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
             syncDev(); sync(); this._applyPanelLayout(); showMain();
-            if(key==='hidden-auto-slots')this._renderSlots();
+            if(['hidden-auto-slots','hidden-options-unlocked'].includes(key))this._renderSlots();
         });
         sync(); this._applyPanelLayout();
         indicator.menu.connect('open-state-changed', (_menu, open) => {

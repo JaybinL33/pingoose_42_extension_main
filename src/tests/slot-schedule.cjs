@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),{build}=require('../models/slotSchedule.js');
+const now=Date.parse('2026-10-18T00:01:00Z');
+const slots=build(now,3,4,3);
+assert.equal(slots[0].begin,'2026-10-18T00:45:00.000Z');
+assert.equal(Date.parse(slots[0].end)-Date.parse(slots[0].begin),45*60000);
+assert.equal(Date.parse(slots[1].begin)-Date.parse(slots[0].begin),60*60000);
+assert.equal(slots.length,3);
+assert.throws(()=>build(now,4,2,3));
+assert.throws(()=>build(now,1.5,2,3));
+assert.throws(()=>build(now,1,2,21));
+assert.throws(()=>build(now,1,96,20),/7 days/);
+console.log('PASS: earliest slot boundary, 15-minute units, count, overlap and date bounds');

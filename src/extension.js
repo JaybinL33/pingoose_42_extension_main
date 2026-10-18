@@ -58,11 +58,6 @@ class Pingoose {
             else this._renderSlots();
         });
 
-        this._indicator.autoSlotsButton.connect('clicked',()=>{
-            if(!Me.imports.models.featureFlags.enabled(this._settings,'hidden-auto-slots'))return;
-            this._slotsExpanded=true;this._requestSlots('slots:open-5');
-        });
-
         this._settingsChanged = this._settings.connect('changed::flash-count', () => this._clearFlash());
         this._renderCards();
         this._chatPanel = new Me.imports.ui.chatPanel.ChatPanel(this._indicator);

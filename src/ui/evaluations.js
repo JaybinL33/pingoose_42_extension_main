@@ -74,7 +74,7 @@ var Controller = class Controller {
                 const avatar = new St.Bin({width: 44, height: 44, style_class: 'pingoose-avatar pingoose-counterpart-avatar', y_align: Clutter.ActorAlign.CENTER});
                 let image = new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 34});
                 if (login && row.avatars?.includes(login) && /^[a-zA-Z0-9_-]{1,64}$/.test(login)) {
-                    const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', `counterpart-${login}`]));
+                    const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', row.devTest && row.devSelf && login===GLib.get_user_name() ? 'profile-avatar' : `counterpart-${login}`]));
                     if (file.query_exists(null)) {
                         avatar.set_style(`background-image: url("${file.get_uri()}"); background-size: cover;`);
                         image = null;

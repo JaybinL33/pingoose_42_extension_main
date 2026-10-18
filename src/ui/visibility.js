@@ -7,7 +7,7 @@ var Controller = class Controller {
         const groups = {
             profile: [indicator.profileItem, indicator.profileSeparator],
             overview: [indicator.overviewItem, indicator.overviewSeparator],
-            slots: [indicator.slotsButtonItem, indicator.slotsItem, indicator.autoSlotsItem],
+            slots: [indicator.slotsButtonItem, indicator.slotsItem],
             evaluations: [indicator.evaluationItem, indicator.evaluationSeparator],
             agenda: [indicator.agendaItem, indicator.agendaSeparator],
             notifications: [indicator.notificationItem, indicator.notificationSeparator],
@@ -56,7 +56,6 @@ var Controller = class Controller {
         this._updatePanelLabel();
         const indicator = this._indicator;
         if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly;
-        if(indicator.autoSlotsItem)indicator.autoSlotsItem.visible=!indicator.loginOnly && Me.imports.models.featureFlags.enabled(this._settings,'hidden-auto-slots');
         const enabled = key => this._settings ? this._settings.get_boolean(`show-${key}`) : true;
         if (indicator.slotsButtonItem) indicator.slotsButtonItem.visible = !indicator.loginOnly && enabled('slots');
         if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly && enabled('slots');
