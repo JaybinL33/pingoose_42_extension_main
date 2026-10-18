@@ -176,6 +176,7 @@ var ChatService = class ChatService {
         const peer = this._peers.get(key);
         if (!peer) return;
         this._peers.delete(key);
+        peer.connectCancel?.cancel();peer.connectCancel=null;peer.connecting=false;
         peer.history=[];peer.queue=[];peer.unread=0;
         for (const conn of [...peer.connections]) this._drop(peer, conn);
         this.emit('peer-changed', key);
@@ -185,6 +186,7 @@ var ChatService = class ChatService {
         this._destroyed = true;
         this._cancel.cancel();
         for (const peer of this._peers.values()) {
+            peer.connectCancel?.cancel();
             for (const conn of peer.connections) this._closeStream(conn);
         }
         for (const conn of [...this._streams.keys()]) this._closeStream(conn);
@@ -236,12 +238,13 @@ var ChatService = class ChatService {
     }
 
     _connect(peer) {
-        if (!this.canOpen(peer.key,peer.scope) || !peer.host || this._connections >= MAX_CONNECTIONS) return;
+        if (!this._alive(peer) || peer.connecting || !this.canOpen(peer.key,peer.scope) || !peer.host || this._connections >= MAX_CONNECTIONS) return;
         this._connections++; // Reserve capacity while the connection is pending.
         peer.connecting = true;
         this.emit('peer-changed', peer.key);
         const client = new Gio.SocketClient({timeout: 5});
-        client.connect_to_host_async(peer.host, this.port, this._cancel, (_client, result) => {
+        peer.connectCancel=new Gio.Cancellable();
+        client.connect_to_host_async(peer.host, this.port, peer.connectCancel, (_client, result) => {
             this._connections--;
             let conn = null, error = null;
             try { conn = client.connect_to_host_finish(result); } catch (e) { error = e; }
@@ -250,6 +253,7 @@ var ChatService = class ChatService {
                 return;
             }
             peer.connecting = false;
+            peer.connectCancel=null;
             if (!this._alive(peer)) {
                 if (conn) this._closeStream(conn);
                 return;
@@ -402,7 +406,7 @@ var ChatService = class ChatService {
             this._cancel, (stream, result) => {
                 let ok = true;
                 try { stream.write_all_finish(result); } catch (_) { ok = false; }
-                if (this._destroyed) return;
+                if (this._destroyed || !this._alive(peer)) return;
                 peer.writing = false;
                 if (!ok) {
                     this._record(peer, 'sys', `Send failed: ${text}`);
@@ -415,14 +419,19 @@ var ChatService = class ChatService {
     _drop(peer, conn) {
         const index = peer.connections.indexOf(conn);
         if (index < 0) return;
+        const authorized=this._handshakes.get(conn)?.ready===true;
         peer.connections.splice(index, 1);
         this._connections--;
         this._closeStream(conn);
         if (!this._alive(peer)) return;
         if (!peer.connections.length) {
-            this._record(peer, 'sys', 'Disconnected');
-            // Messages typed while the link died go out over a fresh connection.
-            if (peer.queue.length) this._connect(peer);
+            const unsent=peer.queue.length;
+            peer.queue=[];
+            peer.writing=false;
+            this._record(peer, 'sys', authorized ? 'Disconnected. Send a new message to reconnect.' :
+                'Connection unavailable or chat is disabled on the other seat.');
+            if(unsent)this._record(peer,'sys',`${unsent} message(s) were not sent. Automatic retry stopped.`);
+            // Only an explicit open/send may reconnect; a rejected handshake must never loop.
         }
         this.emit('peer-changed', peer.key);
     }
