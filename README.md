@@ -4,13 +4,30 @@ GNOME Shell 42에서 Intra 프로필, 프로젝트, 학습시간, 평가, 아젠
 
 ## 설치
 
-Ubuntu GNOME 데스크톱 터미널에서 sudo 없이 실행합니다.
+42경산 교육용 PC에서 Ubuntu 터미널을 열고, 프로젝트 루트(`install.sh`가 있는 폴더)에서 **sudo 없이** 실행합니다.
 
 ```sh
 ./install.sh
 ```
 
-GNOME Shell 42, GJS, GTK 3, WebKit2 4.0, Soup 2.4, Python 3 GI가 필요합니다. 현재 소스를 패키징해 사용자 확장 경로에 설치합니다. **세션을 자동으로 재시작하지 않습니다.** 설치 후 직접 Shell을 리로드하거나 재로그인하세요. 첫 설치에서는 GNOME Extensions에서 Pingoose를 활성화하세요.
+GNOME Shell 42, GJS, GTK 3, WebKit2 4.0, Soup 2.4, Python 3 GI가 필요합니다. 위 명령은 현재 소스를 패키징해 사용자 확장 경로에 설치합니다. **세션을 자동으로 재시작하지 않으므로**, 설치가 완료되면 아래 순서대로 진행하세요.
+
+1. **GNOME Shell 재시작**
+   - X11 환경에서는 `Alt+F2`를 눌러 실행 창을 열고, `r`을 입력한 뒤 `Enter`를 누릅니다.
+
+2. **Pingoose 활성화**
+
+   터미널에서 다음 명령을 실행합니다.
+
+   ```bash
+   gnome-extensions enable pingoose@local
+   ```
+
+3. **인트라 창 열기 및 로그인**
+   - 화면 상단 바의 Pingoose 메뉴를 열고 **Log in to 42 Intra**를 누릅니다.
+   - 열린 인트라 창에서 로그인이 필요하면 로그인합니다. Intra ID는 현재 PC 사용자명과 같아야 합니다.
+   - 이미 로그인되어 있다면 Pingoose 메뉴의 **⋮ → Visit 42 Intra**로 인트라 창을 열 수 있습니다.
+   - 로그인 후 Pingoose 메뉴를 다시 열어 프로필과 프로젝트 정보가 표시되는지 확인하세요.
 
 `main`은 제출용 제한 버전이며, 일반 채팅·슬롯 자동 오픈·개발 옵션을 숨기고 차단합니다. `dev`는 Hidden Options를 표시하며 세 기능이 기본 활성화됩니다. 두 브랜치 모두 `./install.sh`로 설치합니다.
 
