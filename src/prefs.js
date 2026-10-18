@@ -31,5 +31,6 @@ function buildPrefsWidget() {
     });
     tabs.connect('unmap',()=>{if(signal)settings.disconnect(signal);signal=0;});
     syncHidden();
+    preferences.hiddenAccess.attach(tabs,settings);
     return tabs;
 }
