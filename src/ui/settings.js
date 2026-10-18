@@ -120,10 +120,10 @@ var Controller = class Controller {
         this._updatePanelLabel();
         if(this._refreshTimer)GLib.source_remove(this._refreshTimer);
         this._refreshSpinner.hide();
-        this._refreshResult.gicon=new Gio.FileIcon({file:Gio.File.new_for_path(Me.path+'/assets/spinner/'+(success?'complete':'incomplete')+'-symbolic.svg')});
+        this._refreshResult.gicon=new Gio.FileIcon({file:Gio.File.new_for_path(Me.path+'/assets/spinner/'+(success?'complete.svg':'incomplete-symbolic.svg'))});
         this._refreshResult.accessible_name=success?'Refresh complete':'Refresh incomplete. Try again.';
         this._refreshResult.show();
-        this._refreshTimer=GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,4,()=>{
+        this._refreshTimer=GLib.timeout_add(GLib.PRIORITY_DEFAULT,success?2000:4000,()=>{
             this._refreshTimer=0;this._refreshResult.hide();return GLib.SOURCE_REMOVE;
         });
     }
