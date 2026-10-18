@@ -6,10 +6,15 @@ function buildPrefsWidget() {
     const preferences = ExtensionUtils.getCurrentExtension().imports.preferences;
     const tabs = new Gtk.Notebook({hexpand: true, vexpand: true});
     for (const [module, title] of [['general','General'], ['appearance','Appearance'],
-        ['projects','Projects'], ['chat','Cluster Chat'], ['services','42 Services']]) {
+        ['projects','Projects'], ['services','42 Services']]) {
         const page = preferences[module].build(settings);
         page.margin_top = page.margin_bottom = page.margin_start = page.margin_end = 24;
         tabs.append_page(page, new Gtk.Label({label:title}));
+    }
+    if(ExtensionUtils.getCurrentExtension().imports.models.featureFlags.HIDDEN_OPTIONS){
+        const hidden=preferences.hidden.build(settings);
+        hidden.margin_top=hidden.margin_bottom=hidden.margin_start=hidden.margin_end=24;
+        tabs.append_page(hidden,new Gtk.Label({label:'Hidden Options'}));
     }
     return tabs;
 }

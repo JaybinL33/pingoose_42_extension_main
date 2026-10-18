@@ -19,6 +19,7 @@ var Controller = class Controller {
 
     _renderEvaluations(changedId = null) {
         const rows = this._evaluations || [];
+        this._chatPanel?.updateEvaluations(rows);
         // Update only the timestamp label; preserve cards, focus and scroll position.
         const now = Date.now();
         for (const {actor, begin, prefix} of this._evaluationTimes?.values() || []) {
@@ -26,7 +27,7 @@ var Controller = class Controller {
             if (actor.text !== text) actor.text = text;
         }
         this._syncOptionalSections();
-        const key = JSON.stringify([rows, this._feedback, rows.map(row => Date.parse(row.begin) <= Date.now())]);
+        const key = JSON.stringify([rows, this._feedback, rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=890000])]);
         if (key === this._evaluationKey) return;
         this._evaluationKey = key;
         const section = this._indicator.evaluations;
@@ -86,6 +87,11 @@ var Controller = class Controller {
                 details.add_child(new St.Label({text: `Seat · ${login ? row.seats?.[login] || 'Unavailable' : 'Unavailable'}`, style_class: 'pingoose-person-seat'}));
                 person.add_child(details);
                 box.add_child(person);
+                if(login && this._chatPanel?.canEvaluation(row,login)) {
+                    const chat=new St.Button({label:'Cluster Chat',can_focus:true,x_expand:true,style_class:'pingoose-visit-intra'});
+                    chat.connect('clicked',()=>this._chatPanel.openEvaluation(row,login));
+                    box.add_child(chat);
+                }
             }
             const prefix = `Starts · ${new Date(row.begin).toLocaleString('en-GB')}`;
             const timeLabel = label(`${prefix} ${this._evaluationRelativeTime(row.begin, now)}`, 'pingoose-evaluation-time');

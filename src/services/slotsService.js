@@ -1,5 +1,5 @@
 // Slot API adapted from origin/deeev-seunkang-slot. Runs only in our WebKit session.
-async function slotRequest(action, expected) {
+async function slotRequest(action, expected, payload) {
     const date = new Date();
     const end = new Date(date.getTime() + 7 * 86400000);
     const query = new URLSearchParams({start: date.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10)});
@@ -17,6 +17,39 @@ async function slotRequest(action, expected) {
         });
     };
     let rows = await read();
+
+    if (action === 'create' || action === 'create-5') {
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+        if (!csrf) throw new Error('Slot session expired. Open Intra and try again.');
+        const slotsToCreate = Array.isArray(payload) ? payload : [payload];
+        if(!slotsToCreate.length || slotsToCreate.length>5 || slotsToCreate.some(item=>!item || !Number.isFinite(Date.parse(item.begin)) || Date.parse(item.end)-Date.parse(item.begin)!==1800000))throw new Error('Invalid slot schedule.');
+        let createdCount = 0, skipped=0, failed=0;
+        for (const item of slotsToCreate) {
+            if(rows.some(row=>Date.parse(row.start)===Date.parse(item.begin) && Date.parse(row.end)===Date.parse(item.end))){skipped++;continue;}
+            try {
+                const params = new URLSearchParams({
+                    'slot[begin_at]': item.begin,
+                    'slot[end_at]': item.end,
+                });
+                const response = await fetch('/slots.json', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    redirect: 'error',
+                    headers: {
+                        'X-CSRF-Token': csrf,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json, text/javascript, */*; q=0.01',
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                    },
+                    body: params.toString()
+                });
+                if (response.ok) createdCount++; else failed++;
+            } catch (_) {failed++;}
+        }
+        rows = await read();
+        return {rows, created: createdCount, skipped, error:failed?`${failed} slot(s) could not be opened. Refresh and try again.`:null};
+    }
+
     let failed = 0, closed = 0;
     if (action !== 'list') {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -46,10 +79,10 @@ var SlotsService = class SlotsService {
         this.rows = [];
         this.busy = false;
     }
-    run(action, id, callback) {
+    run(action, id, callback, payload = null) {
         if (this.busy) return;
         const expected = action === 'all' ? this.rows.slice() : action === 'future' ? this.rows.filter(row => Date.parse(row.start) > Date.now()) : this.rows.filter(row => row.id === id);
-        if (action !== 'list' && !expected.length) { callback({rows: this.rows, error: 'Refresh slots before closing them.'}); return; }
+        if (action !== 'list' && action !== 'create' && action !== 'create-5' && !expected.length) { callback({rows: this.rows, error: 'Refresh slots before closing them.'}); return; }
         const {WebKit2, GLib} = imports.gi;
         this.busy = true;
         const view = this.view = new WebKit2.WebView({web_context: this.context});
@@ -71,7 +104,7 @@ var SlotsService = class SlotsService {
         view.connect('load-changed', (_view, event) => {
             if (started || event !== WebKit2.LoadEvent.FINISHED || !/^https:\/\/profile\.intra\.42\.fr\/slots\/?(?:[?#]|$)/.test(view.get_uri() || '')) return;
             started = true;
-            const script = `window.__pingooseSlots = null; (${slotRequest.toString()})(${JSON.stringify(action)}, ${JSON.stringify(expected)}).then(value => window.__pingooseSlots = value).catch(error => window.__pingooseSlots = {error: error.message}); void 0;`;
+            const script = `window.__pingooseSlots = null; (${slotRequest.toString()})(${JSON.stringify(action)}, ${JSON.stringify(expected)}, ${JSON.stringify(payload)}).then(value => window.__pingooseSlots = value).catch(error => window.__pingooseSlots = {error: error.message}); void 0;`;
             view.run_javascript_in_world(script, 'pingoose-slots', null, (page, result) => {
                 try { page.run_javascript_in_world_finish(result); } catch (_) { if (this.view === view) finish({error: 'Unable to read slots.'}); }
             });

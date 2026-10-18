@@ -18,6 +18,7 @@ var Controller = class Controller {
 
     _requestSlots(command) {
         if (this._slotsBusy) return;
+        if(command.startsWith('slots:open') && !imports.misc.extensionUtils.getCurrentExtension().imports.models.featureFlags.enabled(this._settings,'hidden-auto-slots'))return;
         this._slotsBusy = true;
         this._slotsError = null;
         this._send(command);

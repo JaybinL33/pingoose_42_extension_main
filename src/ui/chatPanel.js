@@ -5,6 +5,8 @@ const MessageTray = imports.ui.messageTray;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Chat = Me.imports.services.chat;
+const Flags = Me.imports.models.featureFlags;
+const Policy = Me.imports.models.chatPolicy;
 function wrapLabel(label) {
     label.clutter_text.line_wrap = true;
     label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
@@ -15,37 +17,53 @@ var ChatPanel = class ChatPanel {
     constructor(indicator) {
         this._indicator = indicator;
         this._settings = imports.misc.extensionUtils.getSettings();
-        this._blocked = this._settings.get_strv('blocked-chat-seats');
+        this._blocked = [];
         this._expanded = false;
         this._buildChat();
-        if (this._settings.get_boolean('chat-enabled')) this._chat.start();
+        this.sync();
         this._settingsSignal = this._settings.connect('changed', (_settings, key) => {
-            if (key === 'blocked-chat-seats') {
-                this._blocked = this._settings.get_strv(key);
-                this._chat.setBlocked(this._blocked);
-                if (!this._chat.peer(this._chatActive)) this._chatActive = null;
-                this._renderChat();
-            }
-            if (key === 'chat-enabled') {
-                this.reset();
-                if (this._settings.get_boolean(key)) this._chat.start();
-            }
             this.sync();
         });
     }
     sync() {
         if (!this._chatUi) return;
-        if (this._indicator.loginOnly) this._awaitingLogin = true;
-        else if (this._awaitingLogin) {
-            this._awaitingLogin = false;
-            if (this._settings.get_boolean('chat-enabled') && this._chat.state === 'stopped') this._chat.start();
+        const active=!this._indicator.loginOnly;
+        const general=Flags.enabled(this._settings,'hidden-cluster-chat');
+        this._chat.configure({active,general,login:GLib.get_user_name(),grants:this._grants || []});
+        if(active && this._chat.state==='stopped')this._chat.start();
+        this._chatUi.item.visible=active && general;
+        this._chatUi.add.visible=general;
+        if(!general)this._chatUi.peerRow.hide();
+        if(this._chatActive && !this._chat.peer(this._chatActive)){
+            this._chatActive=null;this._chatUi.entry.text='';this._renderChat();
+            this._chatBannerSource?.destroy();this._chatBannerSource=null;
+            this._updatePanelLabel();
+            if(!general)this._expanded=false;
         }
-        const visible = !this._indicator.loginOnly && this._settings.get_boolean('chat-enabled') && this._settings.get_boolean('show-chat');
-        this._chatUi.item.visible = visible;
-        this._chatUi.root.visible = this._expanded && visible;
+        this._chatUi.root.visible=active && this._expanded && (general || !!this._chatActive);
         this._indicator.syncPanelLayout?.();
         if (this._expanded && this._indicator.menu.isOpen && !this._indicator.loginOnly && this._chatActive)
             this._chat.markRead(this._chatActive);
+    }
+    updateEvaluations(rows) {
+        this._grants=Policy.grantsFrom(rows);
+        const expired=this._chat.peers.some(peer=>peer.scope && peer.scope!=='general' &&
+            !this._grants.some(grant=>grant.id===peer.scope && grant.seat===peer.key));
+        this.sync();
+        if(expired){this._chatBannerSource?.destroy();this._chatBannerSource=null;}
+    }
+    canEvaluation(row,login) {
+        return (this._grants || []).find(grant=>grant.id===String(row.id) && grant.login===login && grant.expires>Date.now());
+    }
+    openEvaluation(row,login) {
+        const grant=this.canEvaluation(row,login);
+        if(!grant || this._indicator.loginOnly)return;
+        const key=this._chat.open(grant.seat,grant.id);
+        if(!key)return;
+        this._chatUi.peerEntry.text=grant.seat;
+        this._expanded=true;
+        this._indicator.bringPanelNearMain(this._chatUi.root);
+        this._selectChat(key);this.sync();
     }
     _updatePanelLabel() {
         const count = this._chat.unread;
@@ -55,6 +73,7 @@ var ChatPanel = class ChatPanel {
         this._chatBannerSource?.destroy();
         this._chatBannerSource = null;
         this._expanded = false;
+        this._grants=[];
         this._chatUi.entry.text = '';
         this._chatUi.peerEntry.text = '';
         this._chatUi.peerEntry.remove_style_class_name('pingoose-chat-entry-error');
@@ -145,7 +164,7 @@ var ChatPanel = class ChatPanel {
         ui.chips = new St.BoxLayout({style_class: 'pingoose-chat-chips'});
         chipScroll.add_actor(ui.chips);
         chipRow.add_child(chipScroll);
-        const add = new St.Button({label: '+', can_focus: true, y_align: center,
+        const add = ui.add = new St.Button({label: '+', can_focus: true, y_align: center,
             accessible_name: 'New chat', style_class: 'pingoose-chat-add'});
         chipRow.add_child(add);
         root.add_child(chipRow);
@@ -158,6 +177,7 @@ var ChatPanel = class ChatPanel {
         ui.peerRow.add_child(connect);
         root.add_child(ui.peerRow);
         const submitPeer = () => {
+            if(!Flags.enabled(this._settings,'hidden-cluster-chat'))return;
             const seat = ui.peerEntry.text.trim();
             const key = Chat.SEAT.test(seat) ? this._chat.open(seat) : null;
             if (!key) {
@@ -283,11 +303,11 @@ var ChatPanel = class ChatPanel {
         ui.stick = true;
         const peer = this._chatActive ? this._chat.peer(this._chatActive) : null;
         ui.entry.reactive = ui.send.reactive = !!peer;
-        ui.entry.hint_text = peer ? `Message ${peer.key}…` : 'Add a seat with + first';
+        ui.entry.hint_text = peer ? `Message ${peer.key}…` : 'Open a chat from an evaluation card';
         if (!peer?.history.length) {
             ui.placeholder = wrapLabel(new St.Label({x_expand: true, style_class: 'pingoose-chat-empty',
                 text: peer ? 'No messages yet.'
-                    : 'Use + to add a seat, such as c2r3s4.\nThe other person must have Cluster Chat open at least once.'}));
+                    : 'Open a confirmed evaluation chat before its start time.'}));
             ui.log.add_child(ui.placeholder);
             return;
         }
@@ -345,8 +365,7 @@ var ChatPanel = class ChatPanel {
         const banner = new MessageTray.Notification(this._chatBannerSource, `Cluster Chat · ${key}`, text.slice(0, 200));
         banner.setTransient(true);
         banner.connect('activated', () => {
-            if (!this._chat.peer(key) || !this._settings.get_boolean('chat-enabled')) return;
-            this._settings.set_boolean('show-chat', true);
+            if (!this._chat.peer(key)) return;
             this._expanded = true;
             this._indicator.bringPanelNearMain(this._chatUi.root);
             this._indicator.menu.open();

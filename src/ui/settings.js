@@ -45,6 +45,14 @@ var Controller = class Controller {
             indicator.menu.close();
             imports.misc.extensionUtils.openPrefs();
         });
+        const Flags=Me.imports.models.featureFlags;
+        const devMenu=Me.imports.dev.devOptions.addOptions(settings,()=>this._message({type:'notification',
+            id:`test:${GLib.get_monotonic_time()}`,test:true,body:'Test notification'}),row=>{
+                if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
+                this._evaluations=[...this._evaluations,row];this._renderEvaluations();settings.close();
+            });
+        const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
+        syncDev();
         settings.addAction('Logout Intra', () => this._confirmIntraLogout());
         const showMain = () => {
             for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
@@ -56,7 +64,8 @@ var Controller = class Controller {
         this._themeChanged = this._settings.connect('changed', (_settings, key) => {
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
-            sync(); this._applyPanelLayout(); showMain();
+            syncDev(); sync(); this._applyPanelLayout(); showMain();
+            if(key==='hidden-auto-slots')this._renderSlots();
         });
         sync(); this._applyPanelLayout();
         indicator.menu.connect('open-state-changed', (_menu, open) => {

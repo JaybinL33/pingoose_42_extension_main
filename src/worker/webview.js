@@ -68,6 +68,8 @@ function allowedURI(uri) {
 class Worker {
     constructor() {
         this.login = GLib.get_user_name();
+        const source=Gio.SettingsSchemaSource.new_from_directory(`${SOURCE_ROOT}/schemas`,Gio.SettingsSchemaSource.get_default(),false);
+        this.featureSettings=new Gio.Settings({settings_schema:source.lookup('org.gnome.shell.extensions.pingoose',true)});
         this.auth = null;
         this.loginWindow = false;
         this.nextProfileRead = 0;
@@ -373,7 +375,13 @@ class Worker {
             plan = Model.advanceSeen(previous, identity.subject, rows);
             const retained = new Map(plan.state.evaluations.map(row => [row.id, row]));
             previousRows = new Map(retained);
-            for (const row of rows) if (!plan.state.dismissed.includes(row.id)) retained.set(row.id, {...retained.get(row.id), ...row});
+            for (const row of rows) if (!plan.state.dismissed.includes(row.id)) {
+                const cached=retained.get(row.id);
+                const remaining=Date.parse(row.begin)-Date.now();
+                const users=!row.users.length && cached?.begin===row.begin && remaining>0 && remaining<=890000
+                    ? cached.users : row.users;
+                retained.set(row.id, {...cached,...row,users});
+            }
             plan.state.evaluations = [...retained.values()];
             this.evaluationState = plan.state;
             if (JSON.stringify(previous) !== JSON.stringify(plan.state)) this.writeState(plan.state);
@@ -400,7 +408,8 @@ class Worker {
         }
         this.counterpartChecks ||= new Map();
         for (const row of rows.filter(row => !this.evaluationState.dismissed.includes(row.id))) for (const login of row.users) {
-            const key = `${row.id}:${login}`;
+            const remaining=Date.parse(row.begin)-Date.now();
+            const key = `${row.id}:${login}:${remaining>0 && remaining<=890000?'chat':'early'}`;
             if (now() >= (this.counterpartChecks.get(key) || 0)) {
                 this.counterpartChecks.set(key, now() + 300);
                 this.lookupSeat(row, login, identity);
@@ -466,9 +475,16 @@ class Worker {
             finished = true;
             view.destroy();
             if (stopped || this.auth !== identity) return;
-            row.seats = {...row.seats, [login]: seat || 'Unavailable'};
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id);
-            if (stored) { stored.seats = {...stored.seats, ...row.seats}; this.writeState(this.evaluationState); this.publishEvaluations(); }
+            // Keep a confirmed pre-start seat through transient lookup failures.
+            const cached=stored && Date.parse(stored.begin)>Date.now() &&
+                stored.chatConfirmedAt?.[login]>=Date.parse(stored.begin)-890000 ? stored.seats?.[login] : null;
+            row.seats = {...row.seats, [login]: seat || cached || 'Unavailable'};
+            if (stored) {
+                stored.seats = {...stored.seats, ...row.seats};
+                if(seat)stored.chatConfirmedAt={...stored.chatConfirmedAt,[login]:Date.now()};
+                this.writeState(this.evaluationState); this.publishEvaluations();
+            }
             if (seat && stored) emit({type: 'notification', id: `seat:${row.id}:${login}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
         };
         let attempts = 0;
@@ -684,6 +700,37 @@ class Worker {
     }
 
     command(command) {
+        if (command === 'slots:open-5' || command === 'slots:open-30m') {
+            if (!imports.models.featureFlags.enabled(this.featureSettings,'hidden-auto-slots')) { emit({type:'slots',error:'Automatic slot creation is disabled.'}); return; }
+            if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
+            this.slotsService ||= new imports.services.slotsService.SlotsService(this.context, allowedURI);
+            if (this.slotsService.busy) return;
+            const identity = this.auth;
+
+            const now = new Date();
+            const targetMs = now.getTime() + 30 * 60 * 1000;
+            const step = 15 * 60 * 1000;
+            let startMs = Math.ceil(targetMs / step) * step;
+
+            const pad = n => String(n).padStart(2, '0');
+            const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+
+            const count = command === 'slots:open-5' ? 5 : 1;
+            const payload = [];
+            for (let i = 0; i < count; i++) {
+                payload.push({
+                    begin: fmt(new Date(startMs)),
+                    end: fmt(new Date(startMs + 30 * 60 * 1000))
+                });
+                startMs += 60 * 60 * 1000;
+            }
+
+            this.slotsService.run('create-5', null, result => {
+                if (!stopped && this.auth?.subject === identity.subject) emit({type: 'slots', ...result});
+            }, payload);
+            return;
+        }
+
         if (command === 'reset-all') {
             this.logout('login-needed', success => {
                 if (!success) { emit({type:'reset-error'}); return; }

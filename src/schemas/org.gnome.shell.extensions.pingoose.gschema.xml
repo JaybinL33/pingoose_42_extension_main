@@ -3,6 +3,9 @@
   <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
     <key name="reset-request" type="s"><default>''</default><summary>Pending full reset request</summary></key>
     <key name="reset-status" type="s"><default>''</default><summary>Full reset progress</summary></key>
+    <key name="hidden-cluster-chat" type="b"><default>false</default><summary>Allow general cluster chat</summary></key>
+    <key name="hidden-auto-slots" type="b"><default>false</default><summary>Allow automatic slot creation</summary></key>
+    <key name="hidden-dev-options" type="b"><default>false</default><summary>Show developer actions</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>
       <default>'dark'</default>

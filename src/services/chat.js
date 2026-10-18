@@ -1,4 +1,4 @@
-// Seat-to-seat chat: newline-delimited UTF-8 over TCP, compatible with chat.py.
+// Scoped chat: versioned JSON messages over TCP. Legacy plaintext is rejected.
 // Pure Gio (no Shell imports) so it can also be exercised from a plain gjs script.
 const {Gio, GLib} = imports.gi;
 const Signals = imports.signals;
@@ -7,6 +7,9 @@ const ByteArray = imports.byteArray;
 var PORT = 9000;
 var DOMAIN = '42gyeongsan.kr';
 var SEAT = /^c[0-9]+r[0-9]+s[0-9]+$/i;
+let Policy;
+try { Policy=imports.models.chatPolicy; }
+catch (_) { Policy=imports.misc.extensionUtils.getCurrentExtension().imports.models.chatPolicy; }
 const MAX_LINE = 4096;
 const MAX_CONNECTIONS = 16;
 const MAX_HISTORY = 200;
@@ -40,12 +43,55 @@ var ChatService = class ChatService {
         this.port = port;
         this._blocked = new Set(blocked.map(key => String(key).toLowerCase()));
         this.state = 'stopped';
+        this.policy={active:false,general:false,login:GLib.get_user_name(),grants:[]};
+        this._handshakes=new Map();
         this._peers = new Map();
         this._cancel = new Gio.Cancellable();
         this._connections = 0;
         this._streams = new Map();
         this._rate = {time: 0, count: 0};
         this._destroyed = false;
+    }
+
+    configure(policy) {
+        this.policy=policy;
+        for(const peer of this.peers) {
+            if(peer.scope && !Policy.allowed(policy,peer.key,peer.scope))this.close(peer.key);
+        }
+    }
+    canOpen(seat, scope) { return Policy.allowed(this.policy,seat,scope); }
+    _authorized(peer, conn) {
+        const state=this._handshakes.get(conn);
+        return state?.ready && Policy.accepts(this.policy,peer.key,state.hello) && peer.scope===state.hello.scope;
+    }
+    _sendHello(peer,conn) {
+        const state=this._handshakes.get(conn);
+        if(!state || state.sent)return;
+        state.sent=true;
+        const hello={type:'hello',protocol:'pingoose-chat-2',scope:peer.scope,
+            login:this.policy.login,general:this.policy.general};
+        conn.get_output_stream().write_all_async(ByteArray.fromString(JSON.stringify(hello)+'\n'),GLib.PRIORITY_DEFAULT,
+            this._cancel,(stream,result)=>{
+                try{stream.write_all_finish(result);}catch(_){peer.queue=[];this._drop(peer,conn);return;}
+                if(!this._handshakes.has(conn))return;
+                state.written=true;state.ready=!!state.hello;
+                this._flush(peer);
+            });
+    }
+    _handleLine(peer,conn,text) {
+        let value;try{value=JSON.parse(text);}catch(_){value=null;}
+        const state=this._handshakes.get(conn);
+        if(!state)return false;
+        if(!state.hello){
+            if(!Policy.accepts(this.policy,peer.key,value) || (peer.scope && peer.scope!==value.scope))return false;
+            peer.scope=value.scope;state.hello=value;
+            this._sendHello(peer,conn);
+            state.ready=!!state.written;
+            this._flush(peer);return true;
+        }
+        if(!this._authorized(peer,conn) || value?.type!=='message' || typeof value.text!=='string' || value.text.length>1000)return false;
+        if(value.text.trim())this._record(peer,'in',value.text);
+        return true;
     }
 
     isBlocked(key) {
@@ -94,11 +140,14 @@ var ChatService = class ChatService {
     }
 
     // Starts (or reuses) a conversation; returns its key, or null for bad input.
-    open(input) {
+    open(input, scope = 'general') {
         if (!SEAT.test(String(input ?? '').trim())) return null;
         const target = normalizePeer(input);
         if (!target || this.isBlocked(target.key) || (!this._peers.has(target.key) && this._peers.size >= 64)) return null;
+        if(!this.canOpen(target.key,scope))return null;
+        if(this.peer(target.key)?.scope!==scope)this.close(target.key);
         const peer = this._peer(target.key, target.host);
+        peer.scope=scope;
         if (!peer.connections.length && !peer.connecting) this._connect(peer);
         this.emit('peer-changed', peer.key);
         return peer.key;
@@ -106,8 +155,8 @@ var ChatService = class ChatService {
 
     send(key, text) {
         const peer = this._peers.get(key);
-        text = String(text ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, MAX_LINE);
-        if (!peer || !text || peer.queue.length >= 32 || this.isBlocked(peer.key)) return false;
+        text = String(text ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 1000);
+        if (!peer || !this.canOpen(peer.key,peer.scope) || !text || peer.queue.length >= 32 || this.isBlocked(peer.key)) return false;
         peer.queue.push(text);
         this._record(peer, 'out', text);
         if (peer.connections.length) this._flush(peer);
@@ -126,6 +175,7 @@ var ChatService = class ChatService {
         const peer = this._peers.get(key);
         if (!peer) return;
         this._peers.delete(key);
+        peer.history=[];peer.queue=[];peer.unread=0;
         for (const conn of [...peer.connections]) this._drop(peer, conn);
         this.emit('peer-changed', key);
     }
@@ -185,7 +235,7 @@ var ChatService = class ChatService {
     }
 
     _connect(peer) {
-        if (!peer.host || this._connections >= MAX_CONNECTIONS) return;
+        if (!this.canOpen(peer.key,peer.scope) || !peer.host || this._connections >= MAX_CONNECTIONS) return;
         this._connections++; // Reserve capacity while the connection is pending.
         peer.connecting = true;
         this.emit('peer-changed', peer.key);
@@ -212,7 +262,7 @@ var ChatService = class ChatService {
             }
             this._connections++;
             this._record(peer, 'sys', `Connected to ${peer.host}`);
-            this._attach(peer, conn);
+            this._attach(peer, conn, true);
         });
     }
 
@@ -238,7 +288,7 @@ var ChatService = class ChatService {
         const ip = address.to_string();
         const admit = name => {
             if (!this._streams.has(conn)) return;
-            if (this._destroyed || this.isBlocked(name ?? ip) || (!this._peers.has(peerKey(name ?? ip)) && this._peers.size >= 64)) {
+            if (!this.policy.active || !SEAT.test(peerKey(name ?? ip)) || (!this.policy.general && !this.policy.grants.some(grant=>grant.seat===peerKey(name ?? ip) && grant.expires>Date.now())) || this._destroyed || this.isBlocked(name ?? ip) || (!this._peers.has(peerKey(name ?? ip)) && this._peers.size >= 64)) {
                 this._connections--;
                 this._closeStream(conn);
                 return;
@@ -292,9 +342,11 @@ var ChatService = class ChatService {
         });
     }
 
-    _attach(peer, conn) {
+    _attach(peer, conn, outgoing = false) {
+        this._handshakes.set(conn,{ready:false,sent:false,hello:null});
         peer.connections.push(conn);
         const input = new Gio.DataInputStream({base_stream: conn.get_input_stream(), close_base_stream: false});
+        if(outgoing)this._sendHello(peer,conn);
         this._read(peer, conn, input);
         this.emit('peer-changed', peer.key);
         this._flush(peer);
@@ -304,7 +356,7 @@ var ChatService = class ChatService {
         if (this._destroyed || !peer.connections.includes(conn)) return;
         const old = this._streams.get(conn);
         if (old) GLib.source_remove(old);
-        const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+        const timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, this._handshakes.get(conn)?.hello ? 60 : 10, () => {
             this._streams.delete(conn);
             this._drop(peer, conn);
             return GLib.SOURCE_REMOVE;
@@ -332,7 +384,7 @@ var ChatService = class ChatService {
                 try { text = ByteArray.toString(Uint8Array.from(pending)).replace(/\r$/, ''); }
                 catch (_) { this._drop(peer, conn); return; }
                 pending = [];
-                if (text.trim()) this._record(peer, 'in', text);
+                if (!this._handleLine(peer,conn,text)) {peer.queue=[];this._record(peer,'sys','Chat is not authorized. Both clients must allow this conversation.');this._drop(peer,conn);return;}
             }
             this._read(peer, conn, stream, pending);
         });
@@ -340,10 +392,11 @@ var ChatService = class ChatService {
 
     _flush(peer) {
         if (peer.writing || !peer.queue.length || !peer.connections.length) return;
-        const conn = peer.connections[peer.connections.length - 1];
+        const conn = peer.connections.find(connection=>this._authorized(peer,connection));
+        if(!conn)return;
         const text = peer.queue.shift();
         peer.writing = true;
-        conn.get_output_stream().write_all_async(ByteArray.fromString(`${text}\n`), GLib.PRIORITY_DEFAULT,
+        conn.get_output_stream().write_all_async(ByteArray.fromString(JSON.stringify({type:'message',text})+'\n'), GLib.PRIORITY_DEFAULT,
             this._cancel, (stream, result) => {
                 let ok = true;
                 try { stream.write_all_finish(result); } catch (_) { ok = false; }
@@ -373,6 +426,7 @@ var ChatService = class ChatService {
     }
 
     _closeStream(conn) {
+        this._handshakes.delete(conn);
         const timer = this._streams.get(conn);
         if (timer) GLib.source_remove(timer);
         this._streams.delete(conn);

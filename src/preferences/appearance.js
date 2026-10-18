@@ -8,10 +8,11 @@ function build(settings) {
         hscrollbar_policy: Gtk.PolicyType.NEVER});
     scroll.set_child(list); box.append(scroll);
     const rows = new Map();
+    const available = Order.sections.filter(section=>section[0]!=='chat');
     let draft = Order.read(settings);
     const apply = new Gtk.Button({label:'Apply',sensitive:false});
     const refresh = () => {
-        const order = draft;
+        const order = draft.filter(key=>rows.has(key));
         order.forEach((key, index) => {
             const item = rows.get(key);
             list.reorder_child_after(item.row, index ? rows.get(order[index - 1]).row : null);
@@ -21,7 +22,7 @@ function build(settings) {
         });
         apply.sensitive = JSON.stringify(draft) !== JSON.stringify(Order.read(settings));
     };
-    for (const [key, name, toggles] of Order.sections) {
+    for (const [key, name, toggles] of available) {
         const row = new Gtk.Box({spacing: 10});
         const number = new Gtk.Label({width_chars: 2}); row.append(number);
         const content = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 4, hexpand: true});
@@ -38,10 +39,10 @@ function build(settings) {
         const up = new Gtk.Button({label: '↑', tooltip_text: 'Move up', valign: Gtk.Align.CENTER});
         const down = new Gtk.Button({label: '↓', tooltip_text: 'Move down', valign: Gtk.Align.CENTER});
         const move = delta => {
-            const order = [...draft], index = order.indexOf(key), target = index + delta;
+            const order = draft.filter(value=>value!=='chat'), index = order.indexOf(key), target = index + delta;
             if (target < 0 || target >= order.length) return;
             [order[index], order[target]] = [order[target], order[index]];
-            draft = order; refresh();
+            draft = Order.normalize(order); refresh();
         };
         up.connect('clicked', () => move(-1)); down.connect('clicked', () => move(1));
         row.append(up); row.append(down); list.append(row);

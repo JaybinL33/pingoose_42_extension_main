@@ -71,8 +71,10 @@ function storedState(text) {
         if (!parsed) throw new Error('storage-error');
         parsed.avatars = Array.isArray(row.avatars) ? row.avatars.filter(login => parsed.users.includes(login)) : [];
         parsed.seats = {};
+        parsed.chatConfirmedAt = {};
         for (const login of parsed.users) {
             const seat = row.seats?.[login];
+            if(Number.isFinite(row.chatConfirmedAt?.[login]))parsed.chatConfirmedAt[login]=row.chatConfirmedAt[login];
             if (typeof seat === 'string' && (seat === 'Unavailable' || /^c[0-9]+r[0-9]+s[0-9]+$/i.test(seat))) parsed.seats[login] = seat;
         }
         return parsed;

@@ -162,6 +162,10 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.slotsItem.add_child(slotScroll);
         this.menu.addMenuItem(this.slotsItem);
         this.slotsItem.hide();
+        this.autoSlotsItem=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
+        this.autoSlotsItem.remove_all_children();this.autoSlotsItem.add_style_class_name('pingoose-overview-item');
+        this.autoSlotsButton=new St.Button({label:'Auto Open 5 Slots',can_focus:true,x_expand:true,style_class:'pingoose-visit-intra'});
+        this.autoSlotsItem.add_child(this.autoSlotsButton);this.menu.addMenuItem(this.autoSlotsItem);
         this.refreshLogtimeTitle();
         this.overviewSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this.overviewSeparator);

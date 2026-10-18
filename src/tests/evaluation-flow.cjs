@@ -41,7 +41,7 @@ console.log('PASS: new evaluation → notification → card; duplicate/restart/b
 
 assert.equal(model.parseRows([{...row, begin_at: '2026-10-20T09:45:00', user: 'peer'}])[0].begin, '2026-10-20T09:45:00Z');
 assert.deepEqual(model.parseRows([{...row, kind:'evaluated', user:'peer'}])[0].users, ['peer']);
-vm.runInContext('class EvaluationProbe {'+source.slice(source.indexOf('    _renderEvaluations('),source.indexOf('    _renderCards()'))+'}; globalThis.EvaluationProbe=EvaluationProbe;',context);
+vm.runInContext('class EvaluationProbe {'+source.slice(source.indexOf('    _evaluationRelativeTime('),source.indexOf('    _renderCards()'))+'}; globalThis.EvaluationProbe=EvaluationProbe;',context);
 const e=new context.EvaluationProbe();e._syncOptionalSections=()=>{};e._indicator={evaluations:new Section()};e._feedback={};e._send=command=>{e.sent=command;};
 e._evaluations=[{id:'42',project:'Codexion',kind:'evaluated',begin:new Date(Date.now()-1000).toISOString(),users:['peer']}];
 e._renderEvaluations();
@@ -56,7 +56,7 @@ e._evaluations[0].begin=new Date(Date.now()+60000).toISOString();e._renderEvalua
 box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.length,3);
 console.log('PASS: actual user field, UTC timestamp, Evaluation Info and feedback branches; no early dismissal button');
 vm.runInContext('class VisibilityProbe {'+source.slice(source.indexOf('    _syncOptionalSections()'),source.indexOf('    _renderCards()'))+'}; globalThis.VisibilityProbe=VisibilityProbe;',context);
-const visibility=new context.VisibilityProbe();visibility._updatePanelLabel=()=>{};
+const visibility=new context.VisibilityProbe();visibility._updatePanelLabel=()=>{};visibility._applySectionOrder=visibility._applyPanelLayout=()=>{};
 visibility._indicator=Object.fromEntries(['evaluationItem','evaluationSeparator','notificationItem','notificationSeparator','agendaItem','agendaSeparator'].map(key=>[key,{actor:{}}]));
 visibility._evaluations=[];visibility._notifications=[];visibility._syncOptionalSections();
 assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
