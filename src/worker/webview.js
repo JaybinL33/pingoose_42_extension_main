@@ -207,6 +207,7 @@ class Worker {
                     if (!this.emptyProjectsSince || now() - this.emptyProjectsSince < 6) profile.projects = null;
                 } else this.emptyProjectsSince = null;
                 emit({type: 'profile', login: identity.login, ...profile, avatar: undefined});
+                if(coreReady && Array.isArray(profile.projects) && !this.view.is_loading)this.refreshPart('profile');
                 if (profile.avatar && profile.avatar !== this.avatarURL) this.loadAvatar(profile.avatar, identity);
                 const resource = this.avatarResources.get(profile.avatar);
                 const report = JSON.stringify({projects: profile.projects?.length ?? null, hasImage: !!profile.avatar, resources: this.avatarResources.size,
@@ -263,7 +264,8 @@ class Worker {
                 if (result.status_code !== 200 || result.response_body.length > 1000000) throw new Error('logtime-unavailable');
                 const summary = summarizeLogtime(JSON.parse(result.response_body.data));
                 emit({type: 'study-time', login: identity.login, ...summary});
-            } catch (_) { emit({type: 'study-time', login: identity.login, monthMinutes: null, todayMinutes: null}); }
+                this.refreshPart('logtime',Number.isInteger(summary.monthMinutes) && Number.isInteger(summary.todayMinutes));
+            } catch (_) { this.refreshPart('logtime',false);emit({type: 'study-time', login: identity.login, monthMinutes: null, todayMinutes: null}); }
         });
     }
 
@@ -517,6 +519,7 @@ class Worker {
     }
 
     tick() {
+        if(this.refreshParts && now()>=this.refreshDeadline)this.refreshPart('timeout',false);
         if (stopped || this.signedOut || this.clearingLogin) return;
         if (this.auth && now() >= this.nextProfileReload && now() >= this.notBefore &&
             !this.window.get_visible() && !this.view.is_loading) {
@@ -547,7 +550,8 @@ class Worker {
             results[index] = rows;
             if (++completed !== 2) return;
             this.agendaPending = false;
-            if (stopped || this.auth !== identity || results.some(value => value === null)) return;
+            if (stopped || this.auth !== identity) return;
+            if(results.some(value=>value===null)){this.refreshPart('agenda',false);return;}
             try {
                 // Replace only after both snapshots succeed; errors must not erase the list.
                 const merged = new Map(results[0].map(row => [row.id, row]));
@@ -559,6 +563,7 @@ class Worker {
                 this.writeState(state);
                 if (this.evaluationState?.subject === state.subject) this.evaluationState.agendaIds = state.agendaIds;
                 emit({type: 'agenda', rows});
+                this.refreshPart('agenda');
                 for (const row of rows) if (!seen.has(row.id)) emit({type: 'notification', id: `agenda:${row.id}`,
                     category: 'agenda', body: `New agenda event · ${row.name}\n${new Date(row.begin).toLocaleString('en-GB')}${row.location ? ` · ${row.location}` : ''}`});
             } catch (_) { this.nextAgendaPoll = now() + 60; }
@@ -611,8 +616,8 @@ class Worker {
                 // Reload the authenticated WebKit session to obtain a fresh token.
                 this.reloadAt = now() + this.backoff;
             }
-            if (state) this.fail(state, wait);
-            else this.receive(text, identity);
+            if (state) {this.fail(state, wait);this.refreshPart('evaluations',false);}
+            else this.refreshPart('evaluations',this.receive(text, identity));
         };
         this.session.send_async(message, cancel, (session, result) => {
             try {
@@ -647,6 +652,7 @@ class Worker {
         this.closeServices();
         for (const window of this.projectWindows || []) window.destroy();
         if (this.clearingLogin) { complete?.(false); return; }
+        this.refreshPart('logout',false);
         this.signedOut = true;
         this.clearingLogin = true;
         this.auth = null;
@@ -701,8 +707,17 @@ class Worker {
         this.serviceWindows = new Set();
     }
 
+    refreshPart(name, success=true) {
+        if(!this.refreshParts)return;
+        if(!success){this.refreshParts=null;emit({type:'refresh-state',state:'failed'});return;}
+        this.refreshParts.delete(name);
+        if(!this.refreshParts.size){this.refreshParts=null;emit({type:'refresh-state',state:'complete'});}
+    }
+
     refreshData() {
-        if(!this.auth || this.signedOut || this.clearingLogin)return;
+        if(!this.auth || this.signedOut || this.clearingLogin){emit({type:'refresh-state',state:'failed'});return;}
+        this.refreshParts=new Set(['profile','evaluations','agenda','logtime']);
+        this.refreshDeadline=now()+85;
         const due=Math.max(now(),this.notBefore || 0);
         this.nextPoll=due;
         this.nextAgendaPoll=due;

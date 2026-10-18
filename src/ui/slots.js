@@ -39,7 +39,11 @@ var Controller = class Controller {
             item.add_child(label); section.addMenuItem(item);
         };
 
-        if (this._slotsBusy) { textRow('Updating slots…'); return; }
+        if (this._slotsBusy) {
+            const loading=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
+            loading.add_child(imports.misc.extensionUtils.getCurrentExtension().imports.ui.spinner.create(20));
+            section.addMenuItem(loading);return;
+        }
         if (this._slotsError) textRow(this._slotsError);
         for (const slot of this._slots || []) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});

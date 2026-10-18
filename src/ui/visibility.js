@@ -39,6 +39,12 @@ var Controller = class Controller {
     _updatePanelLabel() {
         const indicator = this._indicator;
         if (!indicator) return;
+        const loading=!indicator.loginOnly && (!indicator.profileReady || this._refreshPending);
+        if(indicator.loadingIcon){
+            indicator.loadingIcon.visible=loading;
+            indicator.icon.visible=!loading;
+            if(loading){indicator.count.text='';return;}
+        }
         if (indicator.loginOnly) { indicator.count.text = 'Login Required'; return; }
         const feedback = (this._evaluations || []).filter(row => Date.parse(row.begin) <= Date.now()).length +
             (this._agenda || []).filter(row => row.feedback).length;

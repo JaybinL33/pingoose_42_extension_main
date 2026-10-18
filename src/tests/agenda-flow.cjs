@@ -4,7 +4,7 @@ const source=fs.readFileSync('src/worker/webview.js','utf8');
 const messages=[];let callbacks=[];let saved=null;let clock=100;
 const context={Model,now:()=>clock,stopped:false,emit:m=>messages.push(m),Soup:{MessageFlags:{NO_REDIRECT:1},Message:{new:()=>({set_flags(){},request_headers:{append(){}}})}}};
 vm.createContext(context);vm.runInContext('class Probe {'+source.slice(source.indexOf('    pollAgenda()'),source.indexOf('    poll()'))+'};globalThis.Probe=Probe;',context);
-const p=new context.Probe();p.auth={subject:'fixture',header:'fixture'};p.notBefore=0;p.session={queue_message:(m,cb)=>callbacks.push(cb)};
+const p=new context.Probe();p.refreshPart=()=>{};p.auth={subject:'fixture',header:'fixture'};p.notBefore=0;p.session={queue_message:(m,cb)=>callbacks.push(cb)};
 p.readState=()=>saved;p.writeState=s=>{saved=Model.storedState(JSON.stringify(s));};
 const event={id:1,name:'Fixture event',begin_at:'2026-10-18T12:00:00Z',end_at:'2026-10-18T13:00:00Z',location:'Auditorium'};
 function run(rows,feedback=[],fail=false){clock+=61;callbacks=[];p.pollAgenda();assert.equal(callbacks.length,2);callbacks.forEach((cb,index)=>cb(null,{status_code:fail&&index===1?500:200,response_body:{length:100,data:JSON.stringify(index?feedback:rows)}}));}

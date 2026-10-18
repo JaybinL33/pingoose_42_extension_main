@@ -19,7 +19,16 @@ var Controller = class Controller {
         gear.set_child(new St.Label({text: '⋮', style_class: 'pingoose-more-icon'}));
         const toolbarSpace = new St.Widget({x_expand: true});
         toolbar.add_child(toolbarSpace);
-        toolbar.add_child(gear);
+        const refreshStatus=new St.BoxLayout({style:'spacing: 4px;',y_align:Clutter.ActorAlign.CENTER});
+        this._refreshSpinner=Me.imports.ui.spinner.create(18);
+        this._refreshResult=new St.Icon({icon_name:'emblem-ok-symbolic',icon_size:18});
+        refreshStatus.add_child(this._refreshSpinner);refreshStatus.add_child(this._refreshResult);
+        this._refreshSpinner.hide();this._refreshResult.hide();
+        toolbar.add_child(refreshStatus);toolbar.add_child(gear);
+        toolbar.connect('destroy',()=>{
+            if(this._refreshTimer)GLib.source_remove(this._refreshTimer);
+            this._refreshTimer=0;this._refreshPending=false;
+        });
         const welcome = new PopupMenu.PopupMenuSection();
         indicator.menu.addMenuItem(welcome);
         // A plain full-width container avoids menu-item ornament/indent columns.
@@ -43,8 +52,14 @@ var Controller = class Controller {
         settings.addAction('Visit 42 Intra', () => { indicator.menu.close(); this._send('show'); });
         settings.addAction('Refresh', () => {
             settings.close();
-            this._send('refresh');
-            if(!indicator.loginOnly)this._requestSlots('slots:list');
+            if(indicator.loginOnly || this._refreshPending)return;
+            this._refreshPending=true;this._refreshWorkerDone=false;this._refreshSlotsDone=false;
+            if(this._refreshTimer)GLib.source_remove(this._refreshTimer);
+            this._refreshResult.hide();this._refreshSpinner.show();this._updatePanelLabel();
+            this._refreshTimer=GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,90,()=>{
+                this._refreshTimer=0;this._finishRefresh(false);return GLib.SOURCE_REMOVE;
+            });
+            this._send('refresh');this._requestSlots('slots:list');
         });
         settings.addAction('Settings', () => {
             indicator.menu.close();
@@ -94,6 +109,23 @@ var Controller = class Controller {
         indicator.onLoginStateChanged = () => { settings.close(); showMain(); };
         gear.connect('clicked', () => settings.toggle());
         showMain();
+    }
+
+    _checkRefreshDone() {
+        if(this._refreshPending && this._refreshWorkerDone && this._refreshSlotsDone)this._finishRefresh(true);
+    }
+
+    _finishRefresh(success) {
+        this._refreshPending=false;
+        this._updatePanelLabel();
+        if(this._refreshTimer)GLib.source_remove(this._refreshTimer);
+        this._refreshSpinner.hide();
+        this._refreshResult.gicon=new Gio.FileIcon({file:Gio.File.new_for_path(Me.path+'/assets/spinner/'+(success?'complete':'incomplete')+'-symbolic.svg')});
+        this._refreshResult.accessible_name=success?'Refresh complete':'Refresh incomplete. Try again.';
+        this._refreshResult.show();
+        this._refreshTimer=GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,4,()=>{
+            this._refreshTimer=0;this._refreshResult.hide();return GLib.SOURCE_REMOVE;
+        });
     }
 
     _applyTheme() {

@@ -137,7 +137,8 @@ class Pingoose {
         indicator.avatar.set_style('');
         indicator.avatar.set_child(new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 40}));
         indicator.projects.removeAll();
-        indicator.projects.addMenuItem(new PopupMenu.PopupMenuItem('Loading projects…', {reactive: false}));
+        const projectsLoading=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
+        projectsLoading.add_child(Me.imports.ui.spinner.create(20));indicator.projects.addMenuItem(projectsLoading);
         this._notifications = [];
         this._unreadIds = new Set();
         indicator.setLoginOnly(true);
@@ -211,7 +212,20 @@ class Pingoose {
             this._resetting=false;this._settings.set_string('reset-status','error');return;
         }
         if (this._resetting) return;
+        if(message.type==='refresh-state'){
+            if(this._refreshPending){
+                this._refreshWorkerDone=message.state==='complete';
+                if(message.state==='failed')this._finishRefresh(false);
+                else this._checkRefreshDone();
+            }
+            return;
+        }
         if (message.type === 'slots') {
+            if(this._refreshPending){
+                this._refreshSlotsDone=Array.isArray(message.rows) && !message.error;
+                if(message.error)this._finishRefresh(false);
+                else this._checkRefreshDone();
+            }
             const callback = this._sessionSlotsCallback;
             this._sessionSlotsCallback = null;
             if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);

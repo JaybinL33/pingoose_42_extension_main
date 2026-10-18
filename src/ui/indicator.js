@@ -34,9 +34,11 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         const box = new St.BoxLayout({style_class: 'panel-status-menu-box'});
         this._initFlapIcon();
         box.add_child(this.icon);
+        this.loadingIcon=Me.imports.ui.spinner.create(20);
+        this.loadingIcon.hide();box.add_child(this.loadingIcon);
         this.count = new St.Label({text: '42', y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-count'});
         box.add_child(this.count);
-        const syncStatus = () => { this.count.visible = this.count.text !== '42'; };
+        const syncStatus = () => { this.count.visible = this.count.text !== '42' && this.count.text !== ''; };
         this.count.connect('notify::text', syncStatus);
         syncStatus();
         this.add_child(box);
@@ -83,20 +85,18 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         deadline.add_child(this.profileDeadline);
         profile.add_child(deadline);
         this.profileContent = profile;
-        this.profileLoading = new St.Label({text: '◌ Loading profile…', style_class: 'pingoose-loading', x_expand: true});
+        this.profileLoading = Me.imports.ui.spinner.create(32);
+        this.profileLoading.x_expand=true;this.profileLoading.x_align=Clutter.ActorAlign.CENTER;
         profileItem.add_child(this.profileLoading);
         profileItem.add_child(profile);
         profile.hide();
         this.profileReady = false;
         this.avatarReady = false;
         this.studyReady = false;
-        let frame = 0;
         this.loadingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
-            const glyph = ['◐', '◓', '◑', '◒'][frame++ % 4];
             this.checkProfileReady();
             if (!this.profileReady) {
-                this.profileLoading.text = `${glyph} Loading profile…`;
-                if (!this.loginOnly) this.count.text = glyph;
+                if (!this.loginOnly) this.count.text = '';
             }
             this.onCountChanged?.();
             return GLib.SOURCE_CONTINUE;
@@ -114,7 +114,8 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         const projectsColumn = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column'});
         projectsColumn.add_child(new St.Label({text: 'My Projects', style_class: 'pingoose-heading'}));
         this.projects = new PopupMenu.PopupMenuSection();
-        this.projects.addMenuItem(new PopupMenu.PopupMenuItem('Loading projects…', {reactive: false}));
+        const projectsLoading=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
+        projectsLoading.add_child(Me.imports.ui.spinner.create(20));this.projects.addMenuItem(projectsLoading);
         const projectScroll = new St.ScrollView({style_class: 'pingoose-project-scroll', overlay_scrollbars: false});
         projectScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         projectScroll.add_actor(this.projects.actor);
