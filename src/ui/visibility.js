@@ -74,7 +74,7 @@ var Controller = class Controller {
         }
         const evaluationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._evaluations?.length && enabled('evaluations');
         const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length && enabled('notifications');
-        const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length && enabled('agenda');
+        const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!(this._agenda?.length || this._agendaAll?.length) && enabled('agenda');
         indicator.agendaItem.actor.visible = agendaVisible;
         indicator.agendaSeparator.actor.visible = agendaVisible && notificationsVisible;
         indicator.evaluationItem.actor.visible = evaluationsVisible;

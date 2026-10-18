@@ -508,6 +508,14 @@ class Worker {
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id && item.begin === row.begin);
             // A missing seat revokes chat; never fall back to an old location.
             if(!stored || stored.missing || Date.parse(stored.begin)<=Date.now())return;
+            this.seatMisses ||= new Map();
+            const missKey=`${row.id}:${row.begin}:${login}`;
+            if(seat)this.seatMisses.delete(missKey);
+            else if(/^c\d+r\d+s\d+$/i.test(stored.seats?.[login] || '')){
+                const misses=(this.seatMisses.get(missKey)||0)+1;
+                this.seatMisses.set(missKey,misses);
+                if(misses<2)return;
+            }
             row.seats = {...row.seats, [login]: seat || 'Unavailable'};
             const seatNotice=`${row.id}:lookup:${row.begin}:${login}`;
             const notify=!this.evaluationState.reminders.includes(seatNotice) || stored.seats?.[login] !== (seat || 'Unavailable');
@@ -521,10 +529,11 @@ class Worker {
             }
             if (notify) emit({type: 'notification', update:true, id: `reminder:${row.id}:${row.begin}:${login}`, body: `Evaluation match confirmed · ${row.project}\n${login} · Seat: ${seat || 'Unavailable'}`});
         };
+        const lookupLimit=row.chatConfirmedAt?.[login]?5:15;
         let attempts = 0;
         const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             if (finished) return GLib.SOURCE_REMOVE;
-            if (++attempts >= 15 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
+            if (++attempts >= lookupLimit || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
             // Seat lookup is deliberately conservative: no arbitrary page text is reported.
             view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length ? '' : e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`, 'pingoose-seat', this.cancel, (page, result) => {
                 try {
@@ -766,6 +775,7 @@ class Worker {
     }
 
     command(command) {
+        if(command==='agenda:refresh'){this.nextAgendaPoll=0;this.pollAgenda();return;}
         if(command==='refresh'){this.refreshData();return;}
         if (command === 'slots:open-auto' || command === 'slots:open-5' || command === 'slots:open-30m') {
             if (!imports.models.featureFlags.enabled(this.featureSettings,'hidden-auto-slots')) { emit({type:'slots',error:'Automatic slot creation is disabled.'}); return; }

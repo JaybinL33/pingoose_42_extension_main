@@ -6,7 +6,7 @@ var Controller = class Controller {
         this._syncOptionalSections();
         const section = this._indicator.agenda;
         section.removeAll();
-        if (!this._agenda?.length) return;
+        if (!this._agenda?.length && !this._agendaAll?.length) return;
         const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         title.remove_all_children();
         title.set_style('padding-left: 0;');
@@ -17,16 +17,46 @@ var Controller = class Controller {
             item.remove_all_children();
             item.set_style('padding: 6px 0; spacing: 0;');
             const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card'});
-            for (const text of [row.name, `${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`, row.location,
+            {
+                const header=new St.BoxLayout({x_expand:true});
+                const title=new St.Label({text:row.name,x_expand:true});
+                title.clutter_text.line_wrap=true;header.add_child(title);
+                const remove=new St.Button({label:'×',accessible_name:'Hide agenda',can_focus:true,
+                    style_class:'pingoose-dismiss',x_align:Clutter.ActorAlign.END,y_align:Clutter.ActorAlign.CENTER});
+                remove.connect('clicked',()=>{this._agendaConfirm=row.id;this._renderAgenda();});
+                header.add_child(remove);box.add_child(header);
+            }
+            for (const text of [ `${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`, row.location,
                 row.feedback ? 'Feedback pending' : ''].filter(Boolean)) {
                 const label = new St.Label({text});
                 label.clutter_text.line_wrap = true;
                 label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
                 box.add_child(label);
             }
+            if(this._agendaConfirm===row.id){
+                box.add_child(new St.Label({text:'Hide this agenda card?',style_class:'pingoose-person-login'}));
+                const actions=new St.BoxLayout({style:'spacing: 8px;'});
+                const yes=new St.Button({label:'Yes',can_focus:true,x_expand:true,style_class:'pingoose-clear-button'});
+                yes.connect('clicked',()=>{
+                    this._dismissedAgendaIds ||= new Set();this._dismissedAgendaIds.add(row.id);
+                    this._agenda=this._agenda.filter(item=>item.id!==row.id);
+                    this._agendaConfirm=null;this._renderAgenda();
+                });
+                const cancel=new St.Button({label:'Cancel',can_focus:true,x_expand:true,style_class:'pingoose-clear-button'});
+                cancel.connect('clicked',()=>{this._agendaConfirm=null;this._renderAgenda();});
+                actions.add_child(yes);actions.add_child(cancel);box.add_child(actions);
+            }
             item.add_child(box);
             section.addMenuItem(item);
         }
+        const footer=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
+        footer.remove_all_children();
+        const refresh=new St.Button({label:'Refresh',can_focus:true,style_class:'pingoose-clear-button'});
+        refresh.connect('clicked',()=>{
+            this._dismissedAgendaIds=new Set();this._agendaConfirm=null;
+            this._agenda=[...(this._agendaAll || [])];this._renderAgenda();this._send('agenda:refresh');
+        });
+        footer.add_child(refresh);section.addMenuItem(footer);
     }
 
 };

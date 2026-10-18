@@ -16,3 +16,10 @@ assert((info.get_attribute_uint32('unix::mode')&0o777)===0o600,'private notes fi
 Notes.clear();
 assert(Notes.list().length===0,'Delete All clears both kinds');
 print('PASS: local notes save/read/update/delete, creation order metadata, private permissions');
+const untitled=Notes.save({project:'libft',projectName:'Libft',login:'fixture',kind:'note',title:'',body:'Content without title'});
+assert(untitled.title==='Untitled','empty title gets default');
+let refused=false;try{Notes.save({...untitled,body:'   \n'});}catch(_){refused=true;}
+assert(refused,'empty content cannot save');
+assert(Notes.list()[0].body==='Content without title','failed save preserves content');
+Notes.clear();
+print('PASS: Untitled fallback and blank content rejection');

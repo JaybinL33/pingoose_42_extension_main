@@ -13,3 +13,8 @@ assert.ok(rows.every(r=>r.devTest));
 console.log('PASS: newly created evaluations use live past/future/now offset and unique IDs');
 
 assert.equal(rows[0].kind,'evaluated');assert.equal(rows[1].kind,'evaluator');
+const agendas=[];
+const withAgenda=context.addOptions(new Item(),()=>{},()=>{},{get_int:()=>0,get_string:()=>role},row=>agendas.push(row));
+withAgenda.items[2].activate();withAgenda.items[2].activate();
+assert.equal(agendas.length,2);assert(agendas.every(row=>row.devTest));assert.notEqual(agendas[0].id,agendas[1].id);
+assert(Date.parse(agendas[0].end)>Date.parse(agendas[0].begin));

@@ -40,6 +40,8 @@ seatLookup('c1r1s1');const afterFirst=notices.length;
 seatLookup('c1r1s1');assert.equal(notices.length,afterFirst,'same seat must not announce again');
 seatLookup('c1r1s2');assert.equal(notices.length,afterFirst+1,'changed seat announces');
 seatLookup(null);
+assert.equal(holder.evaluationState.evaluations[0].seats.peer,'c1r1s2','first miss keeps confirmed seat');
+seatLookup(null);
 assert.equal(holder.evaluationState.evaluations[0].seats.peer,'Unavailable');
 assert.equal(holder.evaluationState.evaluations[0].chatConfirmedAt.peer,undefined,'failed lookup revokes cached confirmation');
 holder.evaluationState.evaluations=[];seatLookup('c1r1s3');

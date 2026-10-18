@@ -23,6 +23,7 @@ function read() {
 function list() { return read().rows.sort((a,b)=>a.created-b.created); }
 function save(note) {
     const {rows,etag}=read();
+    if(note.kind==='note' && !note.title.trim())note={...note,title:'Untitled'};
     if(!/^[a-zA-Z0-9_-]{1,100}$/.test(note.project) || !['todo','note'].includes(note.kind) || (note.kind==='note' && !note.title.trim()) || note.title.length>120 || !note.body.trim() || note.body.length>12000) throw Error('Invalid note');
     const index=rows.findIndex(row=>row.id===note.id);
     const value={...note,id:note.id || GLib.uuid_string_random(),created:index>=0?rows[index].created:Date.now(),updated:Date.now()};

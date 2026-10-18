@@ -146,7 +146,7 @@ var ProjectPanel=class ProjectPanel {
         this.bodyScroll.style_class=this.kind==='todo'?'pingoose-todo-editor-scroll':'pingoose-note-editor-scroll';
         this.body.set_style(this.kind==='todo'?'min-height: 20px;':'min-height: 110px;');
         this.add.label=this.kind==='todo'?'Add TODO List':'Add Note';
-        if(this.editing){this.name.text=this.editing.title||'';this.body.text=this.editing.body||'';this.body.hint_text=this.kind==='todo'?'One task per line. Use [x] for completed tasks.':'Write your notes…';}
+        if(this.editing){this.name.text=this.editing.title==='Untitled'?'':this.editing.title||'';this.body.text=this.editing.body||'';this.body.hint_text=this.kind==='todo'?'One task per line':'Write your notes…';}
         this.status.text='';
     }
     renderList(){
@@ -235,8 +235,8 @@ var ProjectPanel=class ProjectPanel {
             lines.splice(this.editing.taskIndex,1,...body.split('\n').map(line=>`${this.editing.taskDone?'[x]':'[ ]'} ${line}`));
             body=lines.join('\n');
         }
-        const value=Notes.save({...this.editing,project:this.project.slug,projectName:this.project.name,login:this.project.login,kind:this.kind,title:this.kind==='todo'?'':this.name.text.trim(),body});
+        const value=Notes.save({...this.editing,project:this.project.slug,projectName:this.project.name,login:this.project.login,kind:this.kind,title:this.kind==='todo'?'':this.name.text.trim() || 'Untitled',body});
         this.editing=null;this.drafts.delete(this.key());this.renderList();this.renderEditor();this.status.text='Saved locally.';
-    }catch(_){this.status.text=this.kind==='todo'?'Enter at least one task and retry.':'Unable to save. Enter a title and retry.';}}
+    }catch(_){this.status.text=this.kind==='todo'?'Enter at least one task and retry.':'Enter some content and retry.';}}
     destroy(){if(this.cursorLater)Meta.later_remove(this.cursorLater);this.cursorLater=0;if(this.refreshTimer)GLib.source_remove(this.refreshTimer);this.refreshTimer=0;this.monitor.cancel();this.drafts.clear();}
 };

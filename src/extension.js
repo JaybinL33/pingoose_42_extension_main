@@ -44,7 +44,7 @@ class Pingoose {
         this._writing = false;
         this._notifications = [];
         this._unreadIds = new Set();
-        this._agenda = [];
+        this._agenda = [];this._agendaAll=[];this._dismissedAgendaIds=new Set();
         this._evaluations = [];
         this._feedback = {};
         this._restoreCardState();
@@ -113,7 +113,7 @@ class Pingoose {
         this._slotsError = null;
         this._renderSlots();
         const indicator = this._indicator;
-        this._agenda = [];
+        this._agenda = [];this._agendaAll=[];this._dismissedAgendaIds=new Set();
         this._evaluations = [];
         this._feedback = {};
         this._renderEvaluations();
@@ -244,7 +244,8 @@ class Pingoose {
             return;
         }
         if (message.type === 'agenda' && Array.isArray(message.rows) && message.rows.length <= 100) {
-            this._agenda = message.rows;
+            this._agendaAll = [...message.rows,...(this._agendaAll || this._agenda).filter(row=>row.devTest)];
+            this._agenda = this._agendaAll.filter(row=>!this._dismissedAgendaIds?.has(row.id));
             this._renderAgenda();
             return;
         }

@@ -88,7 +88,7 @@ var Controller = class Controller {
                 details.add_child(new St.Label({text: `Seat · ${login ? row.seats?.[login] || 'Unavailable' : 'Unavailable'}`, style_class: 'pingoose-person-seat'}));
                 person.add_child(details);
                 box.add_child(person);
-                if(login && this._chatPanel && Date.parse(row.begin)>now && Date.parse(row.begin)-now<=899000) {
+                if(login && this._chatPanel?.canEvaluation(row,login)) {
                     const available=!!this._chatPanel.canEvaluation(row,login);
                     const chat=new St.Button({label:available?'Cluster Chat':'Cluster Chat · Unavailable',reactive:available,can_focus:available,opacity:available?255:110,x_expand:true,style_class:'pingoose-visit-intra'});
                     chat.connect('clicked',()=>this._chatPanel.openEvaluation(row,login));
