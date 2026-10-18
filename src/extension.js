@@ -16,6 +16,9 @@ const STATUS = Object.fromEntries([
 
 class Pingoose {
     enable() {
+        this._evaluationTimes = new Map();
+        this._evaluationActors = new Map();
+        this._evaluationKey = null;
         this._resetting=false;this._resetReady=false;this._resetWorkerExited=false;
         this._flashActors = [];
         this._flashTimer = 0;
@@ -348,7 +351,7 @@ class Pingoose {
 }
 
 // Feature controllers share this extension's lifecycle and state.
-for (const name of ['settings', 'evaluations', 'slots', 'agenda', 'notifications', 'visibility', 'reset']) {
+for (const name of ['settings', 'evaluations', 'slots', 'agenda', 'notifications', 'visibility', 'reset', 'layout']) {
     const descriptors = Object.getOwnPropertyDescriptors(Me.imports.ui[name].Controller.prototype);
     delete descriptors.constructor;
     Object.defineProperties(Pingoose.prototype, descriptors);

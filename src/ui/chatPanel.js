@@ -43,6 +43,7 @@ var ChatPanel = class ChatPanel {
         const visible = !this._indicator.loginOnly && this._settings.get_boolean('chat-enabled') && this._settings.get_boolean('show-chat');
         this._chatUi.item.visible = visible;
         this._chatUi.root.visible = this._expanded && visible;
+        this._indicator.syncPanelLayout?.();
         if (this._expanded && this._indicator.menu.isOpen && !this._indicator.loginOnly && this._chatActive)
             this._chat.markRead(this._chatActive);
     }
@@ -102,8 +103,11 @@ var ChatPanel = class ChatPanel {
         columns.add_child(main);
         bin.set_child(columns);
         indicator.sideColumns = columns;
+        // Avoid the shared popup outline sliding past independently sized panels on close.
+        const closeMenu = indicator.menu.close.bind(indicator.menu);
+        indicator.menu.close = () => closeMenu(imports.ui.boxpointer.PopupAnimation.NONE);
         // Main stays last; moving a panel immediately before it preserves the others' order.
-        indicator.bringPanelNearMain = panel => columns.set_child_below_sibling(panel, main);
+        indicator.bringPanelNearMain = panel => { columns.set_child_below_sibling(panel, main); indicator.syncPanelLayout?.(); };
         const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         item.remove_all_children();
         item.add_style_class_name('pingoose-overview-item');

@@ -15,6 +15,8 @@ const names = ['profileItem','profileSeparator','overviewItem','overviewSeparato
 const indicator = {menu:{box}};
 for (const name of names) indicator[name]=actor();
 const toolbar=actor(),welcome=actor(),chat=actor(),services=actor();
+indicator.toolbarItem=toolbar;
+indicator.menu.moveMenuItem=(item,index)=>box.set_child_at_index(item.actor || item,index);
 box.children=[toolbar,...names.map(name=>indicator[name]),chat,services,welcome];
 const context = {imports:{misc:{extensionUtils:{getCurrentExtension:()=>({imports:{models:{appearance:model}}})}}}};
 vm.createContext(context);vm.runInContext(fs.readFileSync('src/ui/visibility.js','utf8'),context);

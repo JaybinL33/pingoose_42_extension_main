@@ -138,7 +138,7 @@ var ProjectPanel=class ProjectPanel {
         this.tabs.set_child_at_index(this.kind==='note'?this.noteTab:this.todoTab,0);
         this.project=project;this.expanded=true;this.indicator.bringPanelNearMain(this.root);this.title.text=project.name;this.editing=this.drafts.get(this.key())||null;this.renderList();this.renderEditor();this.sync();}
     switchTab(kind){this.confirmation.hide();this.capture();this.kind=kind;this.editing=this.drafts.get(this.key())||null;this.renderList();this.renderEditor();}
-    sync(){this.root.visible=!!this.project && this.expanded && !this.indicator.loginOnly;}
+    sync(){this.root.visible=!!this.project && this.expanded && !this.indicator.loginOnly;this.indicator.syncPanelLayout?.();}
     reset(){this.confirmation.hide();this.drafts.clear();this.project=null;this.editing=null;this.expanded=false;this.name.text='';this.body.text='';this.list.destroy_all_children();this.renderKey=null;this.sync();}
     renderEditor(){
         this.editor.visible=!!this.editing;this.add.visible=!this.editing;

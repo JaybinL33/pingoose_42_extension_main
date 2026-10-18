@@ -17,12 +17,12 @@ var Controller = class Controller {
         const order = Me.imports.models.appearance.read(this._settings);
         const box = indicator.menu.box;
         // Keep the options toolbar first and the signed-out welcome view last.
-        let index = 1;
+        let index = indicator.toolbarItem ? 1 : 0;
         for (const key of order) {
             for (const item of groups[key]) {
                 const actor = item?.actor || item;
                 if (!actor || actor.get_parent() !== box) continue;
-                if (box.get_child_at_index(index) !== actor) box.set_child_at_index(actor, index);
+                if (box.get_child_at_index(index) !== actor) indicator.menu.moveMenuItem(item, index);
                 index++;
             }
         }

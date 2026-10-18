@@ -14,6 +14,10 @@
       <summary>Number of screen-edge pulses per notification</summary>
       <description>Zero disables the effect. Pulses start at least one second apart.</description>
     </key>
+    <key name="popup-top-margin" type="i"><range min="0" max="100"/><default>6</default><summary>Popup top margin</summary></key>
+    <key name="popup-left-margin" type="i"><range min="0" max="100"/><default>9</default><summary>Popup offset to the left</summary></key>
+    <key name="main-panel-gap" type="i"><range min="0" max="100"/><default>12</default><summary>Gap between main page and nearest panel</summary></key>
+    <key name="panel-gap" type="i"><range min="0" max="100"/><default>12</default><summary>Gap between side panels</summary></key>
     <key name="section-order" type="as">
       <default>['profile', 'overview', 'slots', 'evaluations', 'agenda', 'notifications', 'chat', 'services']</default>
       <summary>Main page section order</summary>

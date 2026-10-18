@@ -43,6 +43,7 @@ var ServicePanel = class ServicePanel {
         const visible = !this.indicator.loginOnly && this.settings.get_boolean('service-enabled') && this.settings.get_boolean('show-services');
         this.item.visible=visible;
         this.root.visible=visible && this.expanded;
+        this.indicator.syncPanelLayout?.();
         if (this.root.visible && this.indicator.menu.isOpen) this.loadPreviews();
     }
     render() {

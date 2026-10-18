@@ -3,8 +3,28 @@ const Main = imports.ui.main;
 const PopupMenu = imports.ui.popupMenu;
 
 var Controller = class Controller {
+    _evaluationRelativeTime(begin, now = Date.now()) {
+        const delta = Date.parse(begin) - now;
+        if (!Number.isFinite(delta)) return '';
+        const minutes = delta > 0 ? Math.ceil(delta / 60000) : Math.floor(-delta / 60000);
+        const days = Math.floor(minutes / 1440);
+        const hours = Math.floor(minutes % 1440 / 60);
+        const remainder = minutes % 60;
+        const parts = [];
+        if (days) parts.push(`${days} d`);
+        if (hours) parts.push(`${hours} h`);
+        if (remainder || !parts.length) parts.push(`${remainder} m`);
+        return `(${parts.join(' ')} ${delta > 0 ? 'remain' : 'ago'})`;
+    }
+
     _renderEvaluations(changedId = null) {
         const rows = this._evaluations || [];
+        // Update only the timestamp label; preserve cards, focus and scroll position.
+        const now = Date.now();
+        for (const {actor, begin, prefix} of this._evaluationTimes?.values() || []) {
+            const text = `${prefix} ${this._evaluationRelativeTime(begin, now)}`;
+            if (actor.text !== text) actor.text = text;
+        }
         this._syncOptionalSections();
         const key = JSON.stringify([rows, this._feedback, rows.map(row => Date.parse(row.begin) <= Date.now())]);
         if (key === this._evaluationKey) return;
@@ -31,6 +51,7 @@ var Controller = class Controller {
         if (!existing) {
             section.removeAll();
             this._evaluationActors = new Map();
+            this._evaluationTimes = new Map();
         }
         if (!rows.length) return;
         for (const row of rows) {
@@ -44,6 +65,7 @@ var Controller = class Controller {
                 actor.clutter_text.line_wrap = true;
                 actor.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
                 box.add_child(actor);
+                return actor;
             };
             label(`${row.project || 'Evaluation'}: ${['evaluator', 'corrector'].includes(row.kind) ? 'Evaluator' : 'Evaluatee'}`, 'pingoose-evaluation-title');
             for (const login of row.users?.length ? row.users : [null]) {
@@ -65,7 +87,9 @@ var Controller = class Controller {
                 person.add_child(details);
                 box.add_child(person);
             }
-            label(`Starts · ${new Date(row.begin).toLocaleString('en-GB')}`, 'pingoose-evaluation-time');
+            const prefix = `Starts · ${new Date(row.begin).toLocaleString('en-GB')}`;
+            const timeLabel = label(`${prefix} ${this._evaluationRelativeTime(row.begin, now)}`, 'pingoose-evaluation-time');
+            this._evaluationTimes.set(row.id, {actor:timeLabel, begin:row.begin, prefix});
             let actionRow = box;
             const paired = Date.parse(row.begin) <= Date.now() && ['confirm', 'later'].includes(this._feedback[row.id]);
             const button = (text, action) => {

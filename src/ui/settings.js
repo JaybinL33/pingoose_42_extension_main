@@ -11,6 +11,7 @@ var Controller = class Controller {
         toolbar.remove_all_children();
         toolbar.add_style_class_name('pingoose-toolbar');
         indicator.menu.addMenuItem(toolbar, 0);
+        indicator.toolbarItem = toolbar;
         const mainItems = indicator.menu._getMenuItems();
 
         const gear = new St.Button({style_class: 'pingoose-settings-button', can_focus: true,
@@ -63,9 +64,9 @@ var Controller = class Controller {
         this._themeChanged = this._settings.connect('changed', (_settings, key) => {
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
-            sync(); showMain();
+            sync(); this._applyPanelLayout(); showMain();
         });
-        sync();
+        sync(); this._applyPanelLayout();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
             if (!open) settings.close();
             if (open) {

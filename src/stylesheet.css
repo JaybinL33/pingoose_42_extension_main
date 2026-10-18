@@ -197,7 +197,7 @@
 .pingoose-light .pingoose-chat-status-err { color: #c92c36; }
 .pingoose-light .pingoose-chat-chip-active { background-color: rgba(22,121,107,0.2); }
 
-.pingoose-chat-columns { spacing: 12px; padding-right: 9px; }
+.pingoose-chat-columns { spacing: 0; padding-right: 9px; padding-top: 6px; }
 .pingoose-chat-panel { width: 360px; padding: 16px; border-radius: 14px; }
 .pingoose-dark .pingoose-chat-panel { background-color: #23272d; color: #edf0f4; }
 .pingoose-light .pingoose-chat-panel { background-color: #f6f7f9; color: #20252c; }
@@ -253,6 +253,10 @@
     -arrow-background-color: transparent;
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
+    -arrow-rise: 0;
+    -boxpointer-gap: 0;
+    border-width: 0;
+    margin: 0;
     background-color: transparent;
     box-shadow: none;
 }

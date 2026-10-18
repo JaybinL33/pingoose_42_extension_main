@@ -138,3 +138,5 @@ Node 검증은 GNOME UI 일부를 모의 환경에서 검사합니다. GJS 채�
 - `src/prefs.js`는 탭 조립만 담당하고, 기능별 UI는 `src/preferences/{general,appearance,projects,chat,services}.js`, 공통 행·확인창은 `common.js`로 분리했습니다.
 - 설정 초기값의 단일 원본은 `src/schemas/org.gnome.shell.extensions.pingoose.gschema.xml`입니다. `src/models/settingsDefaults.js`는 기본 서비스 목록과 스키마 기반 초기화 정책을 담당합니다. 초기값을 중복 선언하지 않습니다.
 - 전체 초기화 흐름은 `src/ui/reset.js`, 파일 정리는 `src/services/resetData.js`에 분리했습니다. 개발용 테스트는 임시 XDG 디렉터리와 메모리 설정으로 실행합니다.
+
+Appearance의 섹션 순서는 ↑/↓로 편집한 뒤 Apply를 눌러 저장합니다. 표시 스위치와 하단 Popup Position & Panel Spacing은 즉시 반영됩니다. 기본값은 상단 6px, 좌측 이동 9px, 메인–패널 및 패널–패널 간격 각각 12px이며 간격 0은 맞붙음을 의미합니다.

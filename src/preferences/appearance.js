@@ -2,14 +2,16 @@ const {Gtk, Gio} = imports.gi;
 const Order = imports.misc.extensionUtils.getCurrentExtension().imports.models.appearance;
 function build(settings) {
     const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 12});
-    box.append(new Gtk.Label({label: 'Show or hide cards and use the arrows to change their order.\nMy Projects and Logtime share one row. Hidden cards keep their position.', xalign: 0, wrap: true}));
+    box.append(new Gtk.Label({label: 'Show or hide cards and use the arrows to change their order.\nMy Projects and Logtime share one row. Hidden cards keep their position. Use Apply to save the new order.', xalign: 0, wrap: true}));
     const list = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 10});
     const scroll = new Gtk.ScrolledWindow({vexpand: true, min_content_height: 360,
         hscrollbar_policy: Gtk.PolicyType.NEVER});
     scroll.set_child(list); box.append(scroll);
     const rows = new Map();
+    let draft = Order.read(settings);
+    const apply = new Gtk.Button({label:'Apply',sensitive:false});
     const refresh = () => {
-        const order = Order.read(settings);
+        const order = draft;
         order.forEach((key, index) => {
             const item = rows.get(key);
             list.reorder_child_after(item.row, index ? rows.get(order[index - 1]).row : null);
@@ -17,6 +19,7 @@ function build(settings) {
             item.up.sensitive = index > 0;
             item.down.sensitive = index < order.length - 1;
         });
+        apply.sensitive = JSON.stringify(draft) !== JSON.stringify(Order.read(settings));
     };
     for (const [key, name, toggles] of Order.sections) {
         const row = new Gtk.Box({spacing: 10});
@@ -35,20 +38,24 @@ function build(settings) {
         const up = new Gtk.Button({label: '↑', tooltip_text: 'Move up', valign: Gtk.Align.CENTER});
         const down = new Gtk.Button({label: '↓', tooltip_text: 'Move down', valign: Gtk.Align.CENTER});
         const move = delta => {
-            const order = Order.read(settings), index = order.indexOf(key), target = index + delta;
+            const order = [...draft], index = order.indexOf(key), target = index + delta;
             if (target < 0 || target >= order.length) return;
             [order[index], order[target]] = [order[target], order[index]];
-            settings.set_strv('section-order', order);
+            draft = order; refresh();
         };
         up.connect('clicked', () => move(-1)); down.connect('clicked', () => move(1));
         row.append(up); row.append(down); list.append(row);
         rows.set(key, {row,number,up,down});
     }
     const reset = new Gtk.Button({label:'Reset order'});
-    reset.connect('clicked', () => settings.reset('section-order')); box.append(reset);
+    reset.connect('clicked', () => {draft=Order.normalize(settings.get_default_value('section-order').deep_unpack());refresh();});
+    const actions=new Gtk.Box({spacing:8});actions.append(reset);actions.append(apply);box.append(actions);
+    apply.connect('clicked',()=>{settings.set_strv('section-order',draft);refresh();});
+    box.append(imports.misc.extensionUtils.getCurrentExtension().imports.preferences.layout.build(settings));
+    const externalChange=()=>{draft=Order.read(settings);refresh();};
     let signal = 0;
     box.connect('map', () => {
-        if (!signal) signal = settings.connect('changed::section-order', refresh);
+        if (!signal) signal = settings.connect('changed::section-order', externalChange);
         refresh();
     });
     box.connect('unmap', () => {

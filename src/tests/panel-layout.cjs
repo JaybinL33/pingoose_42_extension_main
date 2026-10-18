@@ -1,0 +1,13 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const context={};vm.createContext(context);vm.runInContext(fs.readFileSync('src/ui/layout.js','utf8'),context);
+const main={},older={visible:true,set_style(s){this.style=s;}},near={visible:true,set_style(s){this.style=s;}};
+const columns={get_children:()=>[older,near,main],set_style(s){this.style=s;}};
+const values={'popup-top-margin':6,'popup-left-margin':9,'main-panel-gap':12,'panel-gap':12};
+const controller=new context.Controller();
+controller._indicator={sideColumns:columns,menu:{box:main}};
+controller._settings={get_int:key=>values[key]};
+controller._applyPanelLayout();assert.match(columns.style,/padding-top: 6px; padding-right: 9px/);
+values['main-panel-gap']=0;values['panel-gap']=4;controller._applyPanelLayout();
+assert.equal(older.style,'margin-right: 4px;');assert.equal(near.style,'margin-right: 0px;');
+near.visible=false;controller._applyPanelLayout();assert.equal(older.style,'margin-right: 0px;');
+console.log('PASS: default margins, independent gaps, zero gap and nearest visible panel');

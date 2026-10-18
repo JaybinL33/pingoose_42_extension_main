@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('src/ui/chatPanel.js','utf8');
-const definition=source.match(/indicator\.bringPanelNearMain = panel => [^;]+;/)[0];
+const definition=source.match(/indicator\.bringPanelNearMain = panel => \{[^}]+\};/)[0];
 const main={},chat={},services={},project={};
 let order=[project,services,chat,main];
 const context={indicator:{},main,columns:{set_child_below_sibling(panel,sibling){order=order.filter(item=>item!==panel);order.splice(order.indexOf(sibling),0,panel);}}};
