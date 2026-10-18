@@ -8,7 +8,7 @@
     <key name="dev-evaluation-offset-minutes" type="i"><range min="-10080" max="10080"/><default>-1</default><summary>Test evaluation start offset in minutes (negative: past, positive: future)</summary></key>
     <key name="dev-evaluation-role" type="s"><choices><choice value="evaluator"/><choice value="evaluated"/></choices><default>'evaluated'</default><summary>Test evaluation role</summary></key>
     <key name="auto-slot-duration-units" type="i"><range min="1" max="16"/><default>2</default><summary>Slot length in 15 minute units</summary></key>
-    <key name="auto-slot-interval-units" type="i"><range min="1" max="96"/><default>4</default><summary>Interval between slot starts in 15 minute units</summary></key>
+    <key name="auto-slot-interval-units" type="i"><range min="1" max="96"/><default>4</default><summary>Gap after each slot ends in 15 minute units</summary></key>
     <key name="auto-slot-count" type="i"><range min="1" max="20"/><default>5</default><summary>Number of slots to create</summary></key>
     <key name="hidden-options-unlocked" type="b"><default>false</default><summary>Hidden Options unlocked on this computer</summary></key>
     <key name="hidden-dev-options" type="b"><default>false</default><summary>Show developer actions</summary></key>

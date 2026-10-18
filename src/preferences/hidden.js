@@ -11,13 +11,13 @@ function build(settings){
         if(key==='hidden-auto-slots'){
             for(const [setting,title,max] of [
                 ['auto-slot-duration-units','Slot length (15 min × N)',16],
-                ['auto-slot-interval-units','Start interval (15 min × N)',96],
+                ['auto-slot-interval-units','Gap after slot (15 min × N)',96],
                 ['auto-slot-count','Number of slots',20]]){
                 const spin=Gtk.SpinButton.new_with_range(1,max,1);
                 settings.bind(setting,spin,'value',Gio.SettingsBindFlags.DEFAULT);
                 Me.imports.preferences.common.row(box,title,spin);
             }
-            box.append(new Gtk.Label({label:'Starts at the earliest available 15-minute boundary, at least 30 minutes from now. The start interval must be at least the slot length.',wrap:true,xalign:0}));
+            box.append(new Gtk.Label({label:'Starts at the earliest available 15-minute boundary, at least 30 minutes from now. The next slot starts after the previous slot ends plus the configured gap.',wrap:true,xalign:0}));
         }
 
     }
