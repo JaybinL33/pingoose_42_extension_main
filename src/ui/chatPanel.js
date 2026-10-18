@@ -17,7 +17,7 @@ var ChatPanel = class ChatPanel {
     constructor(indicator) {
         this._indicator = indicator;
         this._settings = imports.misc.extensionUtils.getSettings();
-        this._blocked = [];
+        this._blocked = this._settings.get_strv('blocked-chat-seats');
         this._expanded = false;
         this._buildChat();
         this.sync();
@@ -27,6 +27,10 @@ var ChatPanel = class ChatPanel {
     }
     sync() {
         if (!this._chatUi) return;
+        const blocked=this._settings.get_strv('blocked-chat-seats');
+        if(JSON.stringify(blocked)!==JSON.stringify(this._blocked)){
+            this._blocked=blocked;this._chat.setBlocked(blocked);
+        }
         const active=!this._indicator.loginOnly;
         const general=Flags.enabled(this._settings,'hidden-cluster-chat');
         this._chat.configure({active,general,login:GLib.get_user_name(),grants:this._grants || []});

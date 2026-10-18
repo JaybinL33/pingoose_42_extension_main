@@ -8,6 +8,11 @@ function build(settings){
         box.connect('map',()=>{toggle.active=Me.imports.models.featureFlags.enabled(settings,key);});
         toggle.connect('notify::active',()=>settings.set_boolean(key,toggle.active));
         Me.imports.preferences.common.row(box,label,toggle);
+        if(key==='hidden-cluster-chat'){
+            const blocks=new Gtk.Button({label:'Manage Block List'});
+            blocks.connect('clicked',()=>Me.imports.preferences.chatBlocks.open(box,settings));
+            box.append(blocks);
+        }
         if(key==='hidden-auto-slots'){
             for(const [setting,title,max] of [
                 ['auto-slot-duration-units','Slot length (15 min × N)',16],

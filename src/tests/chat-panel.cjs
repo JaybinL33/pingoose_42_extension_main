@@ -7,7 +7,7 @@ const context = {Flags:{enabled:()=>general},GLib:{get_user_name:()=>'fixture'},
 vm.createContext(context);
 vm.runInContext('class Probe {' + source.slice(source.indexOf('    sync()'),source.indexOf('    reset()')) + '}; globalThis.Probe=Probe;',context);
 const p = new context.Probe();
-p._settings={get_boolean:()=>true};
+p._settings={get_boolean:()=>true,get_strv:()=>[]};p._blocked=[];
 p._indicator={loginOnly:false,menu:{isOpen:true}};
 p._chatUi={item:{},root:{},toggle:{},add:{},peerRow:{hide(){}},entry:{}};
 p._chat={unread:7,state:'listening',markRead(){},configure(){},peer:()=>({})};
