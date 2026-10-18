@@ -297,6 +297,13 @@ class Pingoose {
             !message.body.trim() || message.body.length > 1000 ||
             typeof message.id !== 'string' || message.id.length > 1200)
             return;
+        const existing=this._notifications.find(item=>item.id===message.id);
+        if(message.update===true && existing){
+            if(existing.body!==message.body){
+                existing.body=message.body;this._saveCardState?.();this._renderCards();
+            }
+            return;
+        }
         this._receivedNotificationIds ||= new Set();
         if (this._receivedNotificationIds.has(message.id) || this._notifications.some(item => item.id === message.id))
             return;

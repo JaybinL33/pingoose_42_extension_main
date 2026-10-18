@@ -133,3 +133,15 @@ box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).clicked();
 box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).children[0].clicked();
 assert.equal(e.sent,'feedback:missing-test');
 console.log('PASS: missing evaluation requires Yes; Later keeps the card');
+
+const updateProbe=new context.Probe();updateProbe._saveCardState=()=>{};updateProbe._renderCards=()=>{};updateProbe._showBanner=()=>{throw Error('Update must not repeat banner');};updateProbe._flashScreen=()=>{};
+updateProbe._notifications=[{id:'reminder:fixture',body:'Seat: Unavailable',unread:false}];
+updateProbe._receivedNotificationIds=new Set(['reminder:fixture']);
+updateProbe._message({type:'notification',id:'reminder:fixture',update:true,body:'Seat: c1r1s1'});
+assert.equal(updateProbe._notifications.length,1);
+assert.equal(updateProbe._notifications[0].body,'Seat: c1r1s1');
+assert.equal(updateProbe._notifications[0].unread,false);
+updateProbe._notifications=[];
+updateProbe._message({type:'notification',id:'reminder:fixture',update:true,body:'Seat: c1r1s2'});
+assert.equal(updateProbe._notifications.length,0,'dismissed reminder stays dismissed');
+console.log('PASS: seat result updates one reminder without repeated banner or restoring dismissed cards');

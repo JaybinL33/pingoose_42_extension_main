@@ -43,7 +43,7 @@ seatLookup(null);
 assert.equal(holder.evaluationState.evaluations[0].seats.peer,'Unavailable');
 assert.equal(holder.evaluationState.evaluations[0].chatConfirmedAt.peer,undefined,'failed lookup revokes cached confirmation');
 holder.evaluationState.evaluations=[];seatLookup('c1r1s3');
-assert.equal(notices.length,afterFirst+1,'dismissed evaluation ignores delayed seat result');
+assert.equal(notices.length,afterFirst+2,'dismissed evaluation ignores delayed seat result');
 console.log('PASS: persisted seat-notice deduplication, changed seats and stale lookup completion');
 
 const past={...row,id:9,begin_at:new Date(Date.now()-60000).toISOString()};

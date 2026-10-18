@@ -407,18 +407,6 @@ class Worker {
             if(previous && Date.parse(previous.begin)<=Date.now())continue;
             if (previous && previous.begin !== row.begin && !this.evaluationState.dismissed.includes(row.id))
                 emit({type: 'notification', id: `rescheduled:${row.id}:${row.begin}`, body: `Evaluation time changed · ${row.project}\n${new Date(row.begin).toLocaleString('en-GB')}`});
-            const identityChanged = previous && row.users.length && JSON.stringify(previous.users) !== JSON.stringify(row.users);
-            const remaining = Date.parse(row.begin) - Date.now();
-            const reminderKey = `${row.id}:${row.begin}:${row.users.join(',')}`;
-            if ((remaining > 0 && remaining <= 899000 || identityChanged) && !this.evaluationState.dismissed.includes(row.id) && !this.evaluationState.reminders.includes(reminderKey)) {
-                {
-                    this.evaluationState.reminders = [...this.evaluationState.reminders, reminderKey].slice(-2000);
-                    this.writeState(this.evaluationState);
-                    emit({type: 'notification', id: `reminder:${reminderKey}`, body:
-                        `Evaluation match confirmed · ${row.project}\n${row.users.length ? row.users.join(', ') : 'Someone (identity unavailable)'} · Seat: Unavailable`});
-
-                }
-            }
         }
         this.counterpartChecks ||= new Map();
         for (const row of this.evaluationState.evaluations) {
@@ -521,9 +509,9 @@ class Worker {
             // A missing seat revokes chat; never fall back to an old location.
             if(!stored || stored.missing || Date.parse(stored.begin)<=Date.now())return;
             row.seats = {...row.seats, [login]: seat || 'Unavailable'};
-            const seatNotice=`${row.id}:seat:${row.begin}:${login}:${seat}`;
-            const notify=seat && stored && !this.evaluationState.reminders.includes(seatNotice);
-            if(notify)this.evaluationState.reminders=[...this.evaluationState.reminders,seatNotice].slice(-2000);
+            const seatNotice=`${row.id}:lookup:${row.begin}:${login}`;
+            const notify=!this.evaluationState.reminders.includes(seatNotice) || stored.seats?.[login] !== (seat || 'Unavailable');
+            if(!this.evaluationState.reminders.includes(seatNotice))this.evaluationState.reminders=[...this.evaluationState.reminders,seatNotice].slice(-2000);
             if (stored) {
                 stored.seats = {...stored.seats, [login]:seat || 'Unavailable'};
                 stored.chatConfirmedAt={...stored.chatConfirmedAt};
@@ -531,12 +519,12 @@ class Worker {
                 else delete stored.chatConfirmedAt[login];
                 this.writeState(this.evaluationState); this.publishEvaluations();
             }
-            if (notify) emit({type: 'notification', id: `seat:${row.id}:${login}:${seat}`, body: `${row.project} · ${login}\nSeat: ${seat}`});
+            if (notify) emit({type: 'notification', update:true, id: `reminder:${row.id}:${row.begin}:${login}`, body: `Evaluation match confirmed · ${row.project}\n${login} · Seat: ${seat || 'Unavailable'}`});
         };
         let attempts = 0;
         const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             if (finished) return GLib.SOURCE_REMOVE;
-            if (++attempts >= 5 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
+            if (++attempts >= 15 || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
             // Seat lookup is deliberately conservative: no arbitrary page text is reported.
             view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length ? '' : e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`, 'pingoose-seat', this.cancel, (page, result) => {
                 try {
