@@ -22,3 +22,7 @@ for(const development of [false,true]){
     values.clear();assert.equal(c.unlocked(s),development);
 }
 console.log('PASS: on/off, invalid/old phrases, dev override, retained preferences and reset defaults');
+c.unlock(s,'pingoose-hidden-on');
+s.set_boolean('hidden-dev-options',true);
+assert.equal(c.enabled(s,'hidden-dev-options'),false,'removed developer setting cannot be re-enabled');
+console.log('PASS: legacy developer setting stays disabled in main');
