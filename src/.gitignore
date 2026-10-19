@@ -1,0 +1,10 @@
+# Local API credentials — never ship these with the extension.
+/uid
+/secret
+/.env
+/.env.*
+*.zip
+__pycache__/
+
+schemas/gschemas.compiled
+dist/
