@@ -65,6 +65,23 @@ var Controller = class Controller {
             indicator.menu.close();
             imports.misc.extensionUtils.openPrefs();
         });
+        const Flags=Me.imports.models.featureFlags;
+        const devMenu=Me.imports.dev.devOptions.addOptions(settings,()=>this._message({type:'notification',
+            id:`test:${GLib.get_monotonic_time()}`,test:true,body:'Test notification'}),row=>{
+                if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
+                const profile=this._indicator.lastProfile;
+                const login=profile?.login || GLib.get_user_name();
+                const seat=String(profile?.location || GLib.get_host_name()).split('.')[0].toLowerCase();
+                row.users=[login];row.seats={[login]:/^c\d+r\d+s\d+$/.test(seat)?seat:'Unavailable'};
+                row.devSelf=true;row.avatars=[login];row.chatConfirmedAt={[login]:Date.now()};
+                this._evaluations=[...this._evaluations,row];this._saveCardState();this._renderEvaluations();settings.close();
+            },this._settings,row=>{
+                if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
+                this._agendaAll=[...(this._agendaAll || this._agenda),row];this._agenda=[...this._agenda,row];this._renderAgenda();settings.close();
+                this._message({type:'notification',id:row.id,category:'agenda',body:'New agenda event · Test Agenda'});
+            });
+        const syncDev=()=>{devMenu.visible=Flags.enabled(this._settings,'hidden-dev-options');};
+        syncDev();
         const showMain = () => {
             for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
             welcome.actor.visible = indicator.loginOnly;
@@ -89,7 +106,7 @@ var Controller = class Controller {
             }
             if (key === 'reset-request') { this._requestFullReset(); return; }
             if (key === 'reset-status' || this._resetting) return;
-            sync(); this._applyPanelLayout(); showMain();
+            syncDev(); sync(); this._applyPanelLayout(); showMain();
             if(['hidden-auto-slots','hidden-options-unlocked'].includes(key))this._renderSlots();
         });
         sync(); this._applyPanelLayout();

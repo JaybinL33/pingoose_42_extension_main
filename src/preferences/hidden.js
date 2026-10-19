@@ -3,7 +3,7 @@ const Me=imports.misc.extensionUtils.getCurrentExtension();
 function build(settings){
     const box=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:18});
     box.append(new Gtk.Label({label:'Experimental features. General chat requires both clients to enable it. Evaluation details are requested 15 minutes before the start, then every 5 seconds until the evaluation starts. Chat is disabled when the seat is unavailable. Evaluation chat is available only during those final 15 minutes.',wrap:true,xalign:0}));
-    for(const [key,label] of [['hidden-cluster-chat','Cluster Chat'],['hidden-auto-slots','Auto Open Evaluation Slots']]){
+    for(const [key,label] of [['hidden-cluster-chat','Cluster Chat'],['hidden-auto-slots','Auto Open Evaluation Slots'],['hidden-dev-options','Add Developer Options']]){
         const toggle=new Gtk.Switch({active:Me.imports.models.featureFlags.enabled(settings,key),valign:Gtk.Align.CENTER});
         box.connect('map',()=>{toggle.active=Me.imports.models.featureFlags.enabled(settings,key);});
         toggle.connect('notify::active',()=>settings.set_boolean(key,toggle.active));
@@ -26,6 +26,18 @@ function build(settings){
         }
 
     }
+    const role=new Gtk.ComboBoxText();
+    role.append('evaluator','Evaluator');role.append('evaluated','Evaluatee');
+    settings.bind('dev-evaluation-role',role,'active-id',Gio.SettingsBindFlags.DEFAULT);
+    Me.imports.preferences.common.row(box,'Test Evaluation Role',role);
+    const offset=new Gtk.SpinButton({
+        adjustment:new Gtk.Adjustment({lower:-10080,upper:10080,step_increment:1,page_increment:10}),
+        numeric:true,digits:0,valign:Gtk.Align.CENTER,
+    });
+    offset.set_value(settings.get_int('dev-evaluation-offset-minutes'));
+    offset.connect('value-changed',()=>settings.set_int('dev-evaluation-offset-minutes',offset.get_value_as_int()));
+    Me.imports.preferences.common.row(box,'Test Evaluation Start Offset (minutes)',offset);
+    box.append(new Gtk.Label({label:'Negative: started minutes ago. Positive: starts in minutes. Applies to newly created test evaluations.',wrap:true,xalign:0}));
     const scroll=new Gtk.ScrolledWindow({vexpand:true,hscrollbar_policy:Gtk.PolicyType.NEVER,min_content_height:360});
     scroll.set_child(box);
     return scroll;

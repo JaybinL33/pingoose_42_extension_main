@@ -66,7 +66,7 @@ build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
-    gnome-extensions pack --force --out-dir="$build" --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets .
+    gnome-extensions pack --force --out-dir="$build" --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets --extra-source=dev .
 )
 # Install the locally built package directly; the GNOME CLI can fail copying
 # across the desktop's home/USB filesystem boundary after removing the old copy.

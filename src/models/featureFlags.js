@@ -14,6 +14,6 @@ function unlock(settings, phrase) {
     return true;
 }
 function enabled(settings, key) {
-    if (!['hidden-cluster-chat', 'hidden-auto-slots'].includes(key) || !unlocked(settings)) return false;
+    if (!['hidden-cluster-chat', 'hidden-auto-slots', 'hidden-dev-options'].includes(key) || !unlocked(settings)) return false;
     return settings.get_user_value(key) === null ? DEVELOPMENT_DEFAULTS : settings.get_boolean(key);
 }

@@ -7,11 +7,14 @@
     <key name="reset-status" type="s"><default>''</default><summary>Full reset progress</summary></key>
     <key name="hidden-cluster-chat" type="b"><default>false</default><summary>Allow general cluster chat</summary></key>
     <key name="hidden-auto-slots" type="b"><default>false</default><summary>Allow automatic slot creation</summary></key>
+    <key name="dev-evaluation-offset-minutes" type="i"><range min="-10080" max="10080"/><default>-1</default><summary>Test evaluation start offset in minutes (negative: past, positive: future)</summary></key>
+    <key name="dev-evaluation-role" type="s"><choices><choice value="evaluator"/><choice value="evaluated"/></choices><default>'evaluated'</default><summary>Test evaluation role</summary></key>
     <key name="auto-slot-duration-units" type="i"><range min="1" max="16"/><default>2</default><summary>Slot length in 15 minute units</summary></key>
     <key name="auto-slot-interval-units" type="i"><range min="1" max="96"/><default>4</default><summary>Gap after each slot ends in 15 minute units</summary></key>
     <key name="auto-slot-count" type="i"><range min="1" max="20"/><default>5</default><summary>Number of slots to create</summary></key>
     <key name="logout-request" type="s"><default>''</default><summary>Confirmed logout request</summary></key>
     <key name="hidden-options-unlocked" type="b"><default>false</default><summary>Hidden Options unlocked on this computer</summary></key>
+    <key name="hidden-dev-options" type="b"><default>false</default><summary>Show developer actions</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>
       <default>'dark'</default>
