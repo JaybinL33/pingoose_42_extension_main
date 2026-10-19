@@ -68,7 +68,8 @@ class Pingoose {
         this._buildSettings();
         this._sessionHook = new Me.imports.services.systemSessionHook.SystemSessionHook(
             (command, callback) => this._sessionSlotRequest(command, callback),
-            () => !!this._process && !this._indicator.loginOnly);
+            () => !!this._process && !this._indicator.loginOnly,
+            () => this._settings.get_boolean('warn-open-slots-on-logout'));
         this._sessionHook.enable();
         this._startWorker();
         this._requestFullReset();
@@ -100,8 +101,8 @@ class Pingoose {
     }
 
     _visitProject(project) {
-        this._send('project:open:' + JSON.stringify(project));
         this._indicator.menu.close();
+        this._send('project:open:' + JSON.stringify(project));
     }
 
     _clearProfile() {
@@ -177,6 +178,9 @@ class Pingoose {
             this._indicator.status.label.text = 'Intra monitoring is stopped. Restart the extension.';
             return;
         }
+        // Carry the Shell input event time across the asynchronous worker pipe.
+        if (command === 'show' || command === 'login' || /^(project|service):open:/.test(command))
+            command = `present:${global.get_current_time() >>> 0}:${command}`;
         this._commands.push(command);
         this._writeNext();
     }

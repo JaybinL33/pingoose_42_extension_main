@@ -3,7 +3,7 @@ const {Gtk, GLib, WebKit2} = imports.gi;
 const System = imports.system;
 const root = GLib.path_get_dirname(GLib.path_get_dirname(System.programPath));
 const Sites = imports.models.serviceSites;
-function open(context, name, url, project = false) {
+function open(context, name, url, project = false, timestamp = 0) {
 const site = Sites.normalizeSite(name, url);
 if (!site) throw new Error('Invalid service URL');
 const view = new WebKit2.WebView({web_context: context});
@@ -35,5 +35,6 @@ const downloadSignal = context.connect('download-started', (_context, download) 
 win.connect('destroy', () => context.disconnect(downloadSignal));
 view.load_uri(site.url);
 win.show_all();
+win.present_with_time(timestamp);
 return win;
 }

@@ -28,7 +28,7 @@ var Controller = class Controller {
     _renderSlots() {
         this._syncOptionalSections();
         const indicator = this._indicator;
-        indicator.visitIntra.get_child().text = `Evaluation Slots · ${this._slots?.length || 0} ${this._slotsExpanded ? '▴' : '▾'}`;
+        indicator.visitIntra.get_child().text = `Evaluation Slots${this._slots?.length ? ` · ${this._slots.length}` : ''} ${this._slotsExpanded ? '▴' : '▾'}`;
         const section = indicator.slotItems;
         section.removeAll();
         const textRow = text => {

@@ -16,3 +16,16 @@ pending.shift()({error:'failed',rows:[future]});assert.equal(loggedOut,1);assert
 hook._dialog.buttons[0].action();pending.shift()({rows:[]});assert.equal(loggedOut,2);
 new Native()._confirm('ConfirmedReboot');assert.equal(loggedOut,3);hook.disable();
 console.log('PASS: future slot warning; no logout before 60s; timeout keeps slots; cancel clears timer; failed closure prevents logout; successful closure resumes; reboot bypass; hook cleanup');
+
+let warningEnabled=false;
+const optionalHook=new ctx.SystemSessionHook((cmd,cb)=>{commands.push(cmd);pending.push(cb);},()=>true,()=>warningEnabled);
+optionalHook.enable();
+const requestsBefore=commands.length,noticesBefore=notices;
+new Native()._confirm('ConfirmedLogout');
+assert.equal(loggedOut,4);assert.equal(commands.length,requestsBefore);assert.equal(notices,noticesBefore);assert.equal(optionalHook._dialog,undefined);
+warningEnabled=true;
+new Native()._confirm('ConfirmedLogout');
+assert.equal(commands.length,requestsBefore+1);
+pending.shift()({rows:[future]});assert.ok(optionalHook._dialog);
+optionalHook._dialog.buttons[2].action();optionalHook.disable();
+console.log('PASS: warning toggle bypasses slot requests/dialog/notifications and re-enables on next logout');

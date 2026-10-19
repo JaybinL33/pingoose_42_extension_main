@@ -1,6 +1,6 @@
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const source=fs.readFileSync('src/worker/webview.js','utf8');
-const method=source.slice(source.indexOf('    refreshData() {'),source.indexOf('    command(command) {'));
+const method=source.slice(source.indexOf('    refreshData() {'),source.indexOf('    command(command,'));
 const context={now:()=>100,emit:()=>{}};vm.createContext(context);
 const Controller=vm.runInContext('(class {'+method+'})',context);
 function fixture(){

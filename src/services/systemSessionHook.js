@@ -59,13 +59,15 @@ var SlotConfirmDialog = GObject.registerClass(class SlotConfirmDialog extends Mo
 });
 
 var SystemSessionHook = class SystemSessionHook {
-    constructor(request, authenticated) { this._request = request; this._authenticated = authenticated; }
+    constructor(request, authenticated, warningEnabled = () => true) {
+        this._request = request; this._authenticated = authenticated; this._warningEnabled = warningEnabled;
+    }
     enable() {
         const proto = EndSessionDialog.EndSessionDialog.prototype;
         this._original = proto._confirm;
         const hook = this;
         this._replacement = function(signal) {
-            if (signal !== 'ConfirmedLogout' || !hook._authenticated()) return hook._original.call(this, signal);
+            if (signal !== 'ConfirmedLogout' || !hook._authenticated() || !hook._warningEnabled()) return hook._original.call(this, signal);
             if (hook._pending) return;
             hook._pending = true;
             hook._native = this;

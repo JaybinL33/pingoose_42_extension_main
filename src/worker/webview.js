@@ -775,7 +775,13 @@ class Worker {
         this.refreshLogtime();
     }
 
-    command(command) {
+    command(command, timestamp = 0) {
+        const presentation = /^present:(\d{1,10}):(.+)$/.exec(command);
+        if (presentation) {
+            const time = Number(presentation[1]);
+            if (time > 0xffffffff) return;
+            return this.command(presentation[2], time);
+        }
         if(command==='agenda:refresh'){this.nextAgendaPoll=0;this.pollAgenda();return;}
         if(command==='refresh'){this.refreshData();return;}
         if (command === 'slots:open-auto' || command === 'slots:open-5' || command === 'slots:open-30m') {
@@ -815,7 +821,7 @@ class Worker {
                 this.projectWindows ||= new Set();
                 if (this.projectWindows.size >= 5) return;
                 const window = imports.worker.serviceBrowser.open(this.context, project.name,
-                    `https://projects.intra.42.fr/${project.slug}/${project.login}`, true);
+                    `https://projects.intra.42.fr/${project.slug}/${project.login}`, true, timestamp);
                 this.projectWindows.add(window);
                 window.connect('destroy', () => this.projectWindows.delete(window));
             } catch (_) { status('service-error'); }
@@ -828,7 +834,7 @@ class Worker {
                 const site = JSON.parse(command.slice('service:open:'.length));
                 this.serviceWindows ||= new Set();
                 if (this.serviceWindows.size >= 5) return;
-                const window = imports.worker.serviceBrowser.open(this.context, site.name, site.url);
+                const window = imports.worker.serviceBrowser.open(this.context, site.name, site.url, false, timestamp);
                 this.serviceWindows.add(window);
                 window.connect('destroy', () => this.serviceWindows.delete(window));
             } catch (_) { status('service-error'); }
@@ -873,10 +879,10 @@ class Worker {
             this.loginWindow = true;
             this.navigation.hide();
             this.window.show_all();
-            this.window.present();
+            this.window.present_with_time(timestamp);
             if (!this.view.is_loading) this.view.load_uri(HOME);
         }
-        else if (command === 'show') { this.navigation.show(); this.window.show_all(); this.window.present(); }
+        else if (command === 'show') { this.navigation.show(); this.window.show_all(); this.window.present_with_time(timestamp); }
         else if (command === 'hide') this.window.hide();
 
     }

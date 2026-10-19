@@ -52,5 +52,6 @@
   <key name="notify-evaluations" type="b"><default>true</default><summary>Evaluation system notifications</summary></key>
     <key name="notify-agenda" type="b"><default>true</default><summary>Agenda system notifications</summary></key>
     <key name="notify-chat" type="b"><default>true</default><summary>Chat system notifications</summary></key>
+    <key name="warn-open-slots-on-logout" type="b"><default>true</default><summary>Warn about open evaluation slots before logging out</summary></key>
   </schema>
 </schemalist>
