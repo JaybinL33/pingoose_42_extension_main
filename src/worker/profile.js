@@ -3,6 +3,10 @@ function readProfileDOM(login) {
     const heading = Array.from(document.querySelectorAll('h1')).find(h => /^\d{1,3}$/.test(h.textContent.trim()));
     const progress = text.match(/(?:^|\s)(\d{1,3})\s*%/);
     const points = text.match(/Ev\.\s*P\s*(\d+)/i);
+    // Inspect the selected cursus, not the whole page (which can list past Piscine projects).
+    const cursus = document.querySelector('[role="combobox"]')?.textContent?.trim() || '';
+    const noPace = /piscin|transcend|alumni/i.test(cursus) || /\bAlumni[sz]ation\b/i.test(text);
+    const paceApplicable = noPace ? false : /cadet|42cursus/i.test(cursus) ? true : null;
     const pace = text.match(/Pace\s*(\d+)/i);
     const deadlineLabel = text.match(/\b(Milestone\s+Deadline|Ultimate\s+Deadline|Black\s*holed\s+at|Alumni[sz]ation(?:\s+(?:at|date|on))?)\s*:?\s*(.{0,70})/i);
     let deadline = null;
@@ -48,6 +52,7 @@ function readProfileDOM(login) {
         level: heading ? Number(heading.textContent.trim()) : null,
         progress: progress ? Number(progress[1]) : null,
         points: points ? Number(points[1]) : null,
+        paceApplicable,
         pace: pace ? Number(pace[1]) : null,
         deadline,
         deadlineKind: !deadlineLabel ? null : /^milestone/i.test(deadlineLabel[1]) ? 'milestone' :

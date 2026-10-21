@@ -277,7 +277,9 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         const data = this.lastProfile;
         if (!data || this.profileReady) return;
         const ready = data.name && Number.isFinite(data.level) && Number.isFinite(data.progress) &&
-            Number.isFinite(data.points) && Number.isFinite(data.pace) && data.deadline &&
+            Number.isFinite(data.points) &&
+            ((data.paceApplicable === false || data.deadlineKind === 'alumnization') ||
+                (Number.isFinite(data.pace) && data.deadline)) &&
             Array.isArray(data.projects) && this.avatarReady && this.studyReady;
         // A missing/failed optional resource must not conceal the whole profile forever.
         const timedOut = this.profileLoadStarted && GLib.get_monotonic_time() - this.profileLoadStarted >= 30000000;
@@ -330,11 +332,13 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         const progressWidth=90 * (progress ?? 0) / 100;
         if(this.profileProgress.width!==progressWidth)this.profileProgress.width=progressWidth;
         this.profilePoints.text = `Ev.P ${number(data.points, 1000000) ?? '—'}`;
+        const showPace = data.paceApplicable !== false && data.deadlineKind !== 'alumnization';
+        this.profilePace.visible = showPace;
         this.profilePace.text = `Pace ${number(data.pace, 1000) ?? '—'} ·`;
         this.deadlineCaption.text = ({milestone: 'Milestone Deadline :', ultimate: 'Ultimate Deadline :',
             blackhole: 'Blackholed at :', alumnization: 'Alumnization :'})[data.deadlineKind] || 'Milestone Deadline :';
         this.profileDeadline.text = deadlineText(data.deadline);
-        if (number(data.pace, 1000) === 24 && this.profileDeadline.text !== '—')
+        if (showPace && number(data.pace, 1000) === 24 && this.profileDeadline.text !== '—')
             this.profileDeadline.add_style_class_name('pingoose-deadline-danger');
         else
             this.profileDeadline.remove_style_class_name('pingoose-deadline-danger');

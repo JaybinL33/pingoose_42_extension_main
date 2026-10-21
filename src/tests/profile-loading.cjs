@@ -58,3 +58,17 @@ Object.defineProperty(cached.profileProgress,'width',{get:()=>width,set:value=>{
 cached.updateProfile({...complete,level:5,progress:40,points:99});
 assert.equal(widthWrites,0,'unrelated changes must not reset the experience width');
 console.log('PASS: transient zero ignored, level-up accepted, stable corrections accepted and unchanged bar untouched');
+for (const [cursus, expected] of [['Pisciner at C Piscine',false],['Transcender at 42cursus',false],['Alumni at 42cursus',false],['Cadet at 42cursus',true]]) {
+ context.document.querySelector=selector=>({textContent:selector==='[role="combobox"]'?cursus:'Fixture'});
+ context.document.body.innerText='Pace 24 Projects C Piscine';
+ assert.equal(JSON.parse(context.readProfileDOM('fixture')).paceApplicable,expected);
+}
+context.document.body.innerText='Alumnization : 2027. 1. 1. Pace 24';
+assert.equal(JSON.parse(context.readProfileDOM('fixture')).paceApplicable,false);
+cached.updateProfile({...complete,paceApplicable:false});
+assert.equal(cached.profilePace.visible,false);
+cached.updateProfile({...complete,paceApplicable:true,deadlineKind:'milestone'});
+assert.equal(cached.profilePace.visible,true);
+cached.updateProfile({...complete,paceApplicable:true,deadlineKind:'alumnization'});
+assert.equal(cached.profilePace.visible,false);
+console.log('PASS: no Pace for Piscine/Transcender/Alumni; Cadet remains visible despite past Piscine text');

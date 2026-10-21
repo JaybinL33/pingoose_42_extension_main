@@ -306,7 +306,7 @@ var ChatPanel = class ChatPanel {
         ui.entry = new St.Entry({can_focus: true, x_expand: true, style_class: 'pingoose-chat-entry'});
         ui.entry.clutter_text.max_length = 1000;
         ui.send = new St.Button({can_focus: true, accessible_name: 'Send', style_class: 'pingoose-chat-send'});
-        ui.send.set_child(new St.Icon({icon_name: 'mail-send-symbolic', icon_size: 16}));
+        ui.send.set_child(new St.Label({text: '▶'}));
         inputRow.add_child(ui.entry);
         inputRow.add_child(ui.send);
         root.add_child(inputRow);
