@@ -12,7 +12,7 @@ function build(settings) {
         hscrollbar_policy: Gtk.PolicyType.NEVER});
     scroll.set_child(list); box.append(scroll);
     const rows = new Map();
-    const available = Order.sections.filter(section=>section[0]!=='chat');
+    const available = Order.sections.filter(section=>section[0]!=='chat' || imports.misc.extensionUtils.getCurrentExtension().imports.models.featureFlags.enabled(settings,'hidden-cluster-chat'));
     let draft = Order.read(settings);
     const apply = new Gtk.Button({label:'Apply',sensitive:false});
     const refresh = () => {
@@ -45,7 +45,7 @@ function build(settings) {
         const up = new Gtk.Button({label: '↑', tooltip_text: 'Move up', valign: Gtk.Align.CENTER});
         const down = new Gtk.Button({label: '↓', tooltip_text: 'Move down', valign: Gtk.Align.CENTER});
         const move = delta => {
-            const order = draft.filter(value=>value!=='chat'), index = order.indexOf(key), target = index + delta;
+            const order = draft.filter(value=>rows.has(value)), index = order.indexOf(key), target = index + delta;
             if (target < 0 || target >= order.length) return;
             [order[index], order[target]] = [order[target], order[index]];
             draft = Order.normalize(order); Common.preserveListScroll(scroll, list, refresh);

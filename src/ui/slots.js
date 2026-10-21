@@ -53,7 +53,7 @@ var Controller = class Controller {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
             item.remove_all_children(); item.set_style('padding: 6px 24px 6px 0; spacing: 8px;');
             const format = value => new Date(value).toLocaleString('en-GB', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
-            const label = new St.Label({text: `${format(slot.start)} – ${format(slot.end)}`, x_expand: false, y_align:Clutter.ActorAlign.CENTER, style_class: 'pingoose-slot-label pingoose-profile-level'});
+            const label = new St.Label({text: `${format(slot.start)} – ${format(slot.end)}`, x_expand: false, y_align:Clutter.ActorAlign.CENTER, style_class: slot.matched ? 'pingoose-slot-label pingoose-slot-matched' : 'pingoose-slot-label pingoose-profile-level'});
             label.clutter_text.line_wrap = true;
             item.add_child(label);
             const minutes=Math.max(0,Math.round((Date.parse(slot.end)-Date.parse(slot.start))/60000));
@@ -61,6 +61,10 @@ var Controller = class Controller {
                 .filter(([value])=>value>0).map(([value,unit])=>`${value} ${unit}`).join(' ');
             if(duration)item.add_child(new St.Label({text:`(${duration})`,style_class:'pingoose-slot-duration',y_align:Clutter.ActorAlign.CENTER}));
             item.add_child(new St.Widget({x_expand:true}));
+            if(slot.matched){
+                item.add_child(new St.Label({text:'Evaluation Matched',style_class:'pingoose-slot-matched',y_align:Clutter.ActorAlign.CENTER}));
+                section.addMenuItem(item);continue;
+            }
             const close = new St.Button({label: '×', can_focus: true, accessible_name: 'Close slot', style_class: 'pingoose-dismiss'});
             close.connect('clicked', () => this._requestSlots(`slots:close:${slot.id}`));
             item.add_child(close); section.addMenuItem(item);
@@ -150,7 +154,7 @@ var Controller = class Controller {
             });
             actions.add_child(submit);card.add_child(actions);
         }
-        if (this._slots?.length) {
+        if (this._slots?.some(row=>!row.matched)) {
             const closeRow=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
             closeRow.remove_all_children();closeRow.set_style('padding: 6px 24px 6px 0;');
             const all = new St.Button({label: 'Close All Slots', can_focus: true, x_expand: true, x_align: Clutter.ActorAlign.END, style_class: 'pingoose-clear-button'});

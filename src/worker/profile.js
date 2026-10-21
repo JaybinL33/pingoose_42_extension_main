@@ -75,3 +75,22 @@ function summarizeLogtime(data, date = new Date()) {
     return {date: today, monthMinutes: Math.floor(total / 60), todayMinutes: Math.floor(todaySeconds / 60)};
 }
 
+// The profile app selects the first returned cursus. Prefer the common core
+// without changing the server's enrolments or discarding piscine-only accounts.
+function preferCadetCursus() {
+    const original=window.fetch;
+    window.fetch=async function(...args){
+        const response=await original.apply(this,args);
+        const raw=args[0]?.url || String(args[0]);
+        let url;try{url=new URL(raw,location.href);}catch(_){return response;}
+        if(url.origin!=='https://intrapy.intra.42.fr' || !/^\/api\/v1\/users\/[^/]+\/cursus$/.test(url.pathname) || !response.ok)return response;
+        try{
+            const rows=await response.clone().json();
+            if(!Array.isArray(rows))return response;
+            const index=rows.findIndex(row=>row.id===21 || row.slug==='42cursus' || /^(cadet)$/i.test(row.grade || ''));
+            if(index<=0)return response;
+            const ordered=[rows[index],...rows.slice(0,index),...rows.slice(index+1)];
+            return new Response(JSON.stringify(ordered),{status:response.status,statusText:response.statusText,headers:response.headers});
+        }catch(_){return response;}
+    };
+}

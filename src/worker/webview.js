@@ -104,7 +104,11 @@ class Worker {
         this.context.connect('download-started', (_context, download) => download.cancel());
         this.context.get_cookie_manager().set_persistent_storage(
             `${directory}/cookies.sqlite`, WebKit2.CookiePersistentStorage.SQLITE);
-        this.view = new WebKit2.WebView({web_context: this.context});
+        const content=new WebKit2.UserContentManager();
+        content.add_script(new WebKit2.UserScript(`(${imports.worker.profile.preferCadetCursus.toString()})()`,
+            WebKit2.UserContentInjectedFrames.TOP_FRAME,WebKit2.UserScriptInjectionTime.START,
+            ['https://profile-v3.intra.42.fr/*'],null));
+        this.view = new WebKit2.WebView({web_context: this.context,user_content_manager:content});
         this.view.get_settings().set_enable_write_console_messages_to_stdout(false);
         this.window = new Gtk.Window({title: 'Loading…', default_width: 1000, default_height: 750});
         this.window.set_wmclass('pingoose-webview', 'PingooseWebView');
@@ -139,6 +143,10 @@ class Worker {
         });
         this.view.connect('load-changed', (_view, event) => {
             if (event === WebKit2.LoadEvent.STARTED) this.lastPageLoad = now();
+            if(event===WebKit2.LoadEvent.FINISHED && /^https:\/\/profile\.intra\.42\.fr\/(?:[?#].*)?$/.test(this.view.get_uri() || '') && this.loginWindow){
+                this.view.load_uri(HOME);
+                return;
+            }
             if (event === WebKit2.LoadEvent.FINISHED && !this.auth) {
                 status(profileURI(this.view.get_uri()) ? 'loading' : 'login-needed');
             }
@@ -333,6 +341,42 @@ class Worker {
         this.reloadAt = Infinity;
         status('authenticated');
         this.finishLogin();
+    }
+
+    lookupChatSeat(request){
+        if(!this.auth || this.signedOut || !imports.models.featureFlags.enabled(this.featureSettings,'hidden-cluster-chat') ||
+            !/^[a-z0-9_-]{1,64}$/.test(request.login || '') || !/^\d{1,24}$/.test(request.request || ''))return;
+        if(this.chatLookup){emit({type:'chat-lookup',...request,error:'Lookup already running.'});return;}
+        const identity=this.auth;
+        const view=new WebKit2.WebView({web_context:this.context});
+        this.chatLookup=view;
+        let attempts=0,reading=false;
+        const finish=seat=>{
+            view.stop_loading();view.destroy();this.chatLookup=null;
+            if(!stopped && this.auth===identity && !this.signedOut)
+                emit({type:'chat-lookup',...request,seat});
+        };
+        view.connect('permission-request',(_view,permission)=>{permission.deny();return true;});
+        view.connect('decide-policy',(_view,decision,type)=>{
+            if(type===WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION ||
+                (type===WebKit2.PolicyDecisionType.NAVIGATION_ACTION && !allowedURI(decision.get_navigation_action().get_request().get_uri()))){decision.ignore();return true;}
+            return false;
+        });
+        const timer=GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,1,()=>{
+            if(++attempts>15 || stopped || this.auth!==identity){finish(null);return GLib.SOURCE_REMOVE;}
+            if(reading || view.is_loading)return GLib.SOURCE_CONTINUE;
+            reading=true;
+            view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`,'pingoose-chat-lookup',null,(page,result)=>{
+                reading=false;
+                if(this.chatLookup!==view)return;
+                try{
+                    const seat=JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
+                    if(seat){GLib.source_remove(timer);finish(seat.toLowerCase());}
+                }catch(_){}
+            });
+            return GLib.SOURCE_CONTINUE;
+        });
+        view.load_uri('https://profile-v3.intra.42.fr/users/'+encodeURIComponent(request.login));
     }
 
     finishLogin() {
@@ -826,6 +870,7 @@ class Worker {
             if (time > 0xffffffff) return;
             return this.command(presentation[2], time);
         }
+        if(command.startsWith('chat:lookup:')){try{this.lookupChatSeat(JSON.parse(command.slice(12)));}catch(_){}return;}
         const subscription = /^agenda:(subscribe|unsubscribe):(\d+)$/.exec(command);
         if (subscription) { this.changeAgendaSubscription(subscription[2], subscription[1]); return; }
         if(command==='agenda:refresh'){this.nextAgendaPoll=0;this.pollAgenda();return;}

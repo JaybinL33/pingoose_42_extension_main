@@ -305,3 +305,10 @@
 .pingoose-agenda-summary { spacing: 6px; }
 .pingoose-agenda-emphasis { color: #ffffff; font-weight: bold; }
 .pingoose-light .pingoose-agenda-emphasis { color: #000000; }
+
+/* Section headers share the same vertical rhythm. */
+.pingoose-visit-row { padding-top: 4px; padding-bottom: 4px; }
+.pingoose-scroll-container, .pingoose-list-container { padding-top: 4px; padding-bottom: 4px; }
+.pingoose-counterpart-link { color: #ffffff; font-weight: bold; padding: 0; }
+.pingoose-light .pingoose-counterpart-link { color: #000000; }
+.pingoose-slot-matched { color: #ef5350; font-weight: bold; }

@@ -36,7 +36,7 @@ GNOME Shell 42에서 42 Intra의 프로필, 프로젝트, 학습시간, 평가, 
 | Notifications | 저장된 알림 확인 및 삭제 |
 | 42 Services | 등록한 사이트를 서비스 패널과 웹뷰로 열기 |
 
-Evaluation Slots, Evaluation Info, Agenda, Notifications는 제목 버튼으로 접고 펼칩니다. 항목 수는 제목 옆에 표시하며 0은 생략합니다. 펼친 제목 버튼과 42 Services 버튼은 강조색 배경으로 표시됩니다.
+Evaluation Slots, Evaluation Info, Agenda, Notifications는 제목 버튼으로 접고 펼칩니다. 항목 수는 제목 옆에 표시하며 0은 생략합니다. 펼친 제목 버튼과 42 Services 버튼은 강조색 배경으로 표시됩니다. 각 영역의 접기·펼치기 상태는 세션 재시작 후에도 유지됩니다.
 
 메뉴를 다시 열면 **Create Slot과 아젠다 Details는 접힌 상태**로 시작합니다. 프로젝트·서비스 등 옆 패널은 최근에 연 패널이 메인 메뉴에 가장 가깝게 배치됩니다.
 
@@ -71,7 +71,7 @@ Create Slot 카드에서 시작–종료 날짜·시·분을 ▲▼로 조절하
 - 겹치면 충돌한 슬롯의 시간대를 빨간색으로 표시합니다. 실패 시 생성 카드를 유지하고, 성공하면 닫습니다.
 - 생성 후 서버 목록을 다시 읽으므로 서버에서 연결된 슬롯은 합쳐진 시간 범위로 표시됩니다.
 
-Close All Slots는 예약된 평가를 취소하는 기능이 아닙니다. 닫기 요청 후 남아 있는 슬롯도 다시 확인합니다. 생성·삭제의 최종 수락 여부는 Intra 서버가 결정합니다.
+평가가 매칭된 구간은 빨간 Evaluation Matched 항목으로 표시하며 개별 닫기 버튼을 제공하지 않습니다. 분할된 열린 구간은 각각 표시합니다. Close All Slots는 예약된 평가를 취소하는 기능이 아닙니다. 닫기 요청 후 남아 있는 슬롯도 다시 확인합니다. 생성·삭제의 최종 수락 여부는 Intra 서버가 결정합니다.
 
 ## 평가 정보와 채팅
 
@@ -94,7 +94,7 @@ Close All Slots는 예약된 평가를 취소하는 기능이 아닙니다. 닫�
 카드는 제목, 시작 날짜, 남은 시간을 표시합니다. 남은 시간의 0인 단위는 생략하며, 시작 후에는 진행·종료 상태를 표시합니다.
 
 - **Subscribed**: 구독 중이면 제목 옆에 옅게 표시합니다.
-- **Feedback required**: 서버의 미작성 피드백 목록(`/events/unfeedbacked`)에 포함되면 Subscribed 대신 빨간색으로 표시합니다.
+- **Feedback required**: Details 하단의 Visit Agenda Page로 해당 일정 페이지를 열 수 있습니다. 서버의 미작성 피드백 목록(`/events/unfeedbacked`)에 포함되면 Subscribed 대신 빨간색으로 표시합니다.
 - **Details**: 전체 일정, 장소(제공된 경우), 구독 인원/정원, 취소 제한 시각과 본문을 펼칩니다. 본문은 일반 텍스트로 전체 표시하며 별도의 See more 버튼은 없습니다.
 - **Subscribe / Unsubscribe**: Details 하단에서 실제 Intra 신청 상태를 변경합니다. 요청 전에 최신 정원·구독 ID·취소 기한을 확인하고 결과를 다시 조회합니다.
 - **⋮ → Hide Agenda**: 서버 구독을 변경하지 않고 패널에서 해당 카드를 숨깁니다.
@@ -134,6 +134,7 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | 항목 | 기본값 / 동작 |
 | --- | --- |
 | Color mode | Dark. Dark / Light 선택 |
+| Auto-close side panels | 꺼짐. 켜면 메뉴를 닫을 때 프로젝트·서비스·채팅의 옆 패널도 닫음 |
 | Agenda Reset | 숨긴 아젠다 복원 및 현재 목록 재조회. 구독·피드백 상태는 변경하지 않음 |
 | Logout Intra | Intra 세션 종료 및 열린 관련 창·채팅 정리 |
 | Reset All Data | 확인 후 로컬 데이터 삭제, 설정 기본값 복원 및 로그아웃. 서버 프로젝트·슬롯은 변경하지 않음 |
@@ -145,10 +146,10 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | Evaluation matches, reminders and locations | 켜짐 |
 | New agenda events | 켜짐 |
 | Cluster Chat messages | 켜짐 |
-| Warn about open slots before logging out | 켜짐. PC 로그아웃 시 열린 슬롯 확인 경고 |
+| Warn about slots and evaluations before logout | 켜짐. PC 로그아웃 시 열린 슬롯·예정된 평가·피드백 완료 미확인 평가 안내 |
 | Screen flash (0 = Off) | 1회, 0~5회 |
 
-로그아웃 경고를 꺼도 서버 슬롯이 자동으로 닫히지는 않습니다.
+로그아웃 확인창은 열린 슬롯, 예정된 평가, 피드백 완료 확인이 남은 지난 평가를 별도 목록으로 표시합니다. 지난 평가는 핑구스에서 완료 확인하지 않은 카드 기준이며 서버의 실제 미작성 여부를 확정하는 표시는 아닙니다. 프로젝트명·역할·상대 닉네임·시작 시간을 함께 표시합니다. 평가에는 서버가 제공한 프로젝트명과 시간을 표시하며, 슬롯 닫기를 선택해도 예약된 평가는 유지됩니다. 로그아웃 경고를 꺼도 서버 슬롯이 자동으로 닫히지는 않습니다.
 
 ### Appearance
 

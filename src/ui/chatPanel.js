@@ -14,11 +14,12 @@ function wrapLabel(label) {
     return label;
 }
 var ChatPanel = class ChatPanel {
-    constructor(indicator) {
+    constructor(indicator,send) {
+        this._send=send;
         this._indicator = indicator;
         this._settings = imports.misc.extensionUtils.getSettings();
         this._blocked = this._settings.get_strv('blocked-chat-seats');
-        this._expanded = false;
+        this._expanded = this._settings.get_boolean('expand-chat');
         this._buildChat();
         this.sync();
         this._settingsSignal = this._settings.connect('changed', (_settings, key) => {
@@ -42,7 +43,7 @@ var ChatPanel = class ChatPanel {
             this._chatActive=moved.key;this._renderChat();
         }
         if(active && this._chat.state==='stopped')this._chat.start();
-        this._chatUi.item.visible=active && general;
+        this._chatUi.item.visible=active && general && this._settings.get_boolean('show-chat');
         this._chatUi.add.visible=general;
         if(!general)this._chatUi.peerRow.hide();
         if(this._chatActive && !this._chat.peer(this._chatActive)){
@@ -52,6 +53,8 @@ var ChatPanel = class ChatPanel {
             if(!general && !this._selectedEvaluation)this._expanded=false;
         }
         this._chatUi.root.visible=active && this._expanded && (general || !!this._chatActive);
+        this._chatUi.toggle.style_class='pingoose-visit-intra'+(this._chatUi.root.visible ? ' pingoose-toggle-active' : '');
+        if(this._settings.get_boolean('expand-chat')!==this._expanded)this._settings.set_boolean('expand-chat',this._expanded);
         this._indicator.syncPanelLayout?.();
         if (this._expanded && this._indicator.menu.isOpen && !this._indicator.loginOnly && this._chatActive)
             this._chat.markRead(this._chatActive);
@@ -80,6 +83,15 @@ var ChatPanel = class ChatPanel {
         this._indicator.bringPanelNearMain(this._chatUi.root);
         this._selectChat(key);this.sync();
     }
+    completeLookup(message){
+        if(!this._lookup || message.request!==this._lookup.request || message.login!==this._lookup.login)return;
+        this._lookup=null;
+        const ui=this._chatUi;
+        if(this._indicator.loginOnly || !Flags.enabled(this._settings,'hidden-cluster-chat'))return;
+        const key=Chat.SEAT.test(message.seat || '') ? this._chat.open(message.seat,'general',false,message.login) : null;
+        if(!key){ui.peerEntry.add_style_class_name('pingoose-chat-entry-error');return;}
+        ui.peerEntry.text='';ui.peerRow.hide();this._selectChat(key);
+    }
     _updatePanelLabel() {
         const count = this._chat.unread;
         this._chatUi.toggle.label = count ? `Cluster Chat · ${count > 5 ? '5+' : count}` : 'Cluster Chat';
@@ -88,6 +100,7 @@ var ChatPanel = class ChatPanel {
         this._chatBannerSource?.destroy();
         this._chatBannerSource = null;
         this._expanded = false;
+        this._lookup=null;
         this._grants=[];this._sessions=[];this._selectedEvaluation=null;
         this._chatUi.entry.text = '';
         this._chatUi.peerEntry.text = '';
@@ -186,7 +199,7 @@ var ChatPanel = class ChatPanel {
         root.add_child(chipRow);
 
         ui.peerRow = new St.BoxLayout({visible: false, style_class: 'pingoose-chat-input-row'});
-        ui.peerEntry = new St.Entry({hint_text: 'Seat number (e.g. c2r3s4)', can_focus: true,
+        ui.peerEntry = new St.Entry({hint_text: 'Seat number or Intra ID', can_focus: true,
             x_expand: true, style_class: 'pingoose-chat-entry'});
         const connect = new St.Button({label: 'Connect', can_focus: true, style_class: 'pingoose-chat-send'});
         ui.peerRow.add_child(ui.peerEntry);
@@ -194,7 +207,13 @@ var ChatPanel = class ChatPanel {
         root.add_child(ui.peerRow);
         const submitPeer = () => {
             if(!Flags.enabled(this._settings,'hidden-cluster-chat'))return;
-            const seat = ui.peerEntry.text.trim();
+            const seat = ui.peerEntry.text.trim().toLowerCase();
+            if(!Chat.SEAT.test(seat) && /^[a-z0-9_-]{1,64}$/.test(seat)){
+                const request=String(GLib.get_monotonic_time());
+                this._lookup={request,login:seat};
+                this._send?.('chat:lookup:'+JSON.stringify(this._lookup));
+                return;
+            }
             const key = Chat.SEAT.test(seat) ? this._chat.open(seat) : null;
             if (!key) {
                 ui.peerEntry.add_style_class_name('pingoose-chat-entry-error');
@@ -276,7 +295,7 @@ var ChatPanel = class ChatPanel {
             const content = new St.BoxLayout({style_class: 'pingoose-chat-chip-content'});
             const dot = peer.connections.length ? 'on' : peer.connecting ? 'wait' : 'off';
             content.add_child(new St.Label({text: '●', y_align: center, style_class: `pingoose-chat-dot pingoose-chat-dot-${dot}`}));
-            content.add_child(new St.Label({text: peer.key, y_align: center}));
+            content.add_child(new St.Label({text: peer.login ? `${peer.login} (${peer.key})` : peer.key, y_align: center}));
             if (peer.unread) {
                 content.add_child(new St.Label({text: peer.unread > 9 ? '9+' : String(peer.unread),
                     y_align: center, style_class: 'pingoose-chat-badge'}));

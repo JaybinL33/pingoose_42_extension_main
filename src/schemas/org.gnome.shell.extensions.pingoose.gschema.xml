@@ -16,6 +16,13 @@
     <key name="hidden-options-unlocked" type="b"><default>false</default><summary>Hidden Options unlocked on this computer</summary></key>
     <key name="hidden-dev-options" type="b"><default>false</default><summary>Show developer actions</summary></key>
     <key name="topbar-animation" type="b"><default>true</default><summary>Animate the Pingoose top bar icon</summary></key>
+    <key name="expand-services" type="b"><default>false</default><summary>Expand services panel</summary></key>
+    <key name="expand-chat" type="b"><default>false</default><summary>Expand chat panel</summary></key>
+    <key name="expand-slots" type="b"><default>false</default><summary>Expand evaluation slots</summary></key>
+    <key name="expand-evaluations" type="b"><default>true</default><summary>Expand evaluation info</summary></key>
+    <key name="expand-agenda" type="b"><default>true</default><summary>Expand agenda</summary></key>
+    <key name="expand-notifications" type="b"><default>true</default><summary>Expand notifications</summary></key>
+    <key name="auto-close-panels" type="b"><default>false</default><summary>Close side panels when the main menu closes</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>
       <default>'dark'</default>
@@ -56,6 +63,6 @@
   <key name="notify-evaluations" type="b"><default>true</default><summary>Evaluation system notifications</summary></key>
     <key name="notify-agenda" type="b"><default>true</default><summary>Agenda system notifications</summary></key>
     <key name="notify-chat" type="b"><default>true</default><summary>Chat system notifications</summary></key>
-    <key name="warn-open-slots-on-logout" type="b"><default>true</default><summary>Warn about open evaluation slots before logging out</summary></key>
+    <key name="warn-open-slots-on-logout" type="b"><default>true</default><summary>Warn about open slots, scheduled evaluations and pending feedback before logout</summary></key>
   </schema>
 </schemalist>

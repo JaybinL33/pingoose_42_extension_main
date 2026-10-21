@@ -89,7 +89,15 @@ var Controller = class Controller {
                 if (row.unsubscriptionDelay > 0) text(`Cancellation deadline: ${new Date(Date.parse(row.begin)-row.unsubscriptionDelay*3600000).toLocaleString('en-GB')}`);
                 if (row.description) text(row.description);
                 if (row.kind === 'exam') text('Register for both the exam session and the exam project to attend.');
-                if (this._agendaActionStatus?.id === row.id) text(this._agendaActionStatus.text);
+                if (this._agendaActionStatus?.id === row.id && this._agendaActionStatus.text) text(this._agendaActionStatus.text);
+                if(row.feedback && /^\d+$/.test(row.id)){
+                    const visit=new St.Button({label:'Visit Agenda Page',can_focus:true,style_class:'pingoose-clear-button'});
+                    visit.connect('clicked',()=>{
+                        this._indicator.menu.close();
+                        this._send('service:open:'+JSON.stringify({name:row.name,url:`https://profile.intra.42.fr/${row.kind==='exam'?'exams':'events'}/${row.id}`}));
+                    });
+                    details.add_child(visit);
+                }
                 const action = row.subscribed ? 'unsubscribe' : 'subscribe';
                 if (Agenda.agendaAction(row, action)) {
                     const busy = this._agendaBusy === row.id;

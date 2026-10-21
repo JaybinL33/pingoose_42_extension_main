@@ -26,7 +26,8 @@ class Actor {
 }
 class Section {constructor(){this.items=[];} removeAll(){this.items=[];} addMenuItem(i){this.items.push(i);}}
 let banners=0;
-const context={PopupMenu:{PopupBaseMenuItem:Actor,PopupMenuItem:Actor},St:{BoxLayout:Actor,Label:Actor,Button:Actor,Bin:Actor,Icon:Actor},Clutter:{ActorAlign:{CENTER:0,END:1}},Pango:{WrapMode:{WORD_CHAR:0},EllipsizeMode:{NONE:0}},Main:{notify(){banners++;}},GLib:{DateTime:{new_now_local:()=>({format:()=> '18:45'})}}};
+class Menu {constructor(){this.actor={hide(){}};}addAction(){}toggle(){}close(){}destroy(){}}
+const context={imports:{ui:{main:{uiGroup:{add_child(){}}}}},PopupMenu:{PopupMenu:Menu,PopupBaseMenuItem:Actor,PopupMenuItem:Actor},St:{Side:{TOP:0},BoxLayout:Actor,Label:Actor,Button:Actor,Bin:Actor,Icon:Actor},Clutter:{ActorAlign:{CENTER:0,END:1}},Pango:{WrapMode:{WORD_CHAR:0},EllipsizeMode:{NONE:0}},Main:{notify(){banners++;}},GLib:{DateTime:{new_now_local:()=>({format:()=> '18:45'})}}};
 vm.createContext(context);
 vm.runInContext('class Probe {'+source.slice(source.indexOf('    _message(message)'),source.indexOf('    _flashScreen('))+source.slice(source.indexOf('    _renderCards()'),source.indexOf('    disable()'))+'}; globalThis.Probe=Probe;',context);
 const p=new context.Probe();p._settings={get_boolean:()=>true};p._saveCardState=()=>{};p._syncOptionalSections=()=>{};p._updatePanelLabel=()=>{};p._notifications=[];p._indicator={cards:new Section(),menu:{isOpen:false},count:{},profileReady:true,loginOnly:false};p._flashScreen=()=>{};p._showBanner=()=>{banners++;};
@@ -46,7 +47,7 @@ console.log('PASS: new evaluation → notification → card; duplicate/restart/b
 assert.equal(model.parseRows([{...row, begin_at: '2026-10-20T09:45:00', user: 'peer'}])[0].begin, '2026-10-20T09:45:00Z');
 assert.deepEqual(model.parseRows([{...row, kind:'evaluated', user:'peer'}])[0].users, ['peer']);
 vm.runInContext('class EvaluationProbe {'+source.slice(source.indexOf('    _evaluationRelativeTime('),source.indexOf('    _renderCards()'))+'}; globalThis.EvaluationProbe=EvaluationProbe;',context);
-const e=new context.EvaluationProbe();e._syncOptionalSections=()=>{};e._indicator={evaluations:new Section()};e._feedback={};e._send=command=>{e.sent=command;};
+const e=new context.EvaluationProbe();e._syncOptionalSections=()=>{};e._indicator={evaluations:new Section(),menu:{connect(){return 1;},disconnect(){}}};e._optionsManager={addMenu(){},removeMenu(){}};e._feedback={};e._send=command=>{e.sent=command;};
 e._evaluations=[{id:'42',project:'Codexion',kind:'evaluated',begin:new Date(Date.now()-1000).toISOString(),users:['peer']}];
 e._renderEvaluations();
 let box=e._indicator.evaluations.items[0].children[0];
@@ -65,7 +66,7 @@ visibility._indicator=Object.fromEntries(['evaluationItem','evaluationSeparator'
 visibility._evaluations=[];visibility._notifications=[];visibility._syncOptionalSections();
 assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
 visibility._evaluations=[{}];visibility._notifications=[{}];visibility._agenda=[{}];visibility._syncOptionalSections();
-assert.ok(Object.entries(visibility._indicator).filter(([key])=>key !== 'notificationSeparator').every(([,item])=>item.actor.visible));
+assert.ok(Object.entries(visibility._indicator).filter(([key])=>!key.endsWith('Separator')).every(([,item])=>item.actor.visible));
 assert.equal(visibility._indicator.notificationSeparator.actor.visible,false);
 visibility._settingsVisible=true;visibility._syncOptionalSections();
 assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));

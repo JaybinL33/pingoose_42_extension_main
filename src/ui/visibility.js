@@ -30,7 +30,7 @@ var Controller = class Controller {
             const item = groups[key][0];
             return !!(item?.actor || item)?.visible;
         });
-        for (const key of ['profile', 'overview', 'evaluations', 'agenda']) {
+        for (const key of ['profile', 'overview']) {
             const separator = groups[key][1];
             if (separator) (separator.actor || separator).visible = visible.includes(key) && key !== visible[visible.length - 1];
         }
@@ -79,9 +79,9 @@ var Controller = class Controller {
         const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length && enabled('notifications');
         const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length && enabled('agenda');
         indicator.agendaItem.actor.visible = agendaVisible;
-        indicator.agendaSeparator.actor.visible = agendaVisible && notificationsVisible;
+        indicator.agendaSeparator.actor.visible = false;
         indicator.evaluationItem.actor.visible = evaluationsVisible;
-        indicator.evaluationSeparator.actor.visible = evaluationsVisible && (agendaVisible || notificationsVisible);
+        indicator.evaluationSeparator.actor.visible = false;
         indicator.notificationItem.actor.visible = notificationsVisible;
         // Caps, not fixed heights: short lists occupy only their natural height.
         // Preserve more room for notifications when the slot list is expanded.

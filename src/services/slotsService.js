@@ -14,11 +14,13 @@ async function slotRequest(action, expected, payload) {
         if (!response.ok) throw new Error('Unable to load slots. Open Intra and check your session.');
         const data = await response.json();
         if (!Array.isArray(data) || data.length > 1000) throw new Error('Invalid slot response.');
-        return data.filter(row => row?.title === 'Available').map(row => {
+        return data.filter(row => row?.title === 'Available' ||
+            (Array.isArray(row?.className) ? row.className : String(row?.className || '').split(/\s+/)).includes('reserved')).map(row => {
             const id = String(row.id), ids = String(row.ids || row.id);
             if (!/^\d+$/.test(id) || !/^\d+(,\d+)*$/.test(ids) || !Number.isFinite(Date.parse(row.start)) || !Number.isFinite(Date.parse(row.end)))
                 throw new Error('Invalid slot response.');
-            return {id, ids, start: row.start, end: row.end};
+            const matched=(Array.isArray(row.className) ? row.className : String(row.className || '').split(/\s+/)).includes('reserved');
+            return {id, ids, start: row.start, end: row.end, ...(matched ? {matched:true,project:String(row.project_name || row.project?.name || row.title || 'Evaluation').replace(/<[^>]*>/g,'').slice(0,200)} : {})};
         });
     };
     const succeeded = async response => {
@@ -75,7 +77,8 @@ async function slotRequest(action, expected, payload) {
 
     let failed = 0, closed = 0;
     const deleted = [];
-    const targets = action === 'all' ? rows : action === 'future' ? rows.filter(row => Date.parse(row.start) > Date.now()) : expected;
+    const available=rows.filter(row=>!row.matched);
+    const targets = action === 'all' ? available : action === 'future' ? available.filter(row => Date.parse(row.end) > Date.now()) : (expected || []).filter(row=>!row.matched);
     if (action !== 'list') {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         if (!csrf) throw new Error('Slot session expired. Open Intra and try again.');
@@ -83,6 +86,7 @@ async function slotRequest(action, expected, payload) {
         for (const target of targets) {
             const current = rows.find(row => row.id === target.id);
             if (!current) continue;
+            if(current.matched){failed++;continue;}
             if (current.ids !== target.ids || current.start !== target.start || current.end !== target.end) { failed++; continue; }
             try {
                 const response = await fetch(`/slots/${current.id}.json`, {method: 'POST', credentials: 'same-origin', redirect: 'error',

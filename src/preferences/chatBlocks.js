@@ -6,9 +6,9 @@ function open(parent,settings) {
     dialog.connect('response',()=>dialog.destroy());
     const box=dialog.get_content_area();box.spacing=12;
     box.margin_top=box.margin_bottom=box.margin_start=box.margin_end=18;
-    box.append(new Gtk.Label({label:'Block a cluster (c2), row (c2r3), or seat (c2r3s4). Blocked conversations are disconnected immediately.',wrap:true,xalign:0}));
+    box.append(new Gtk.Label({label:'Block a cluster (c2), row (c2r3), seat (c2r3s4), or Intra ID (@login). Blocked conversations are disconnected immediately.',wrap:true,xalign:0}));
     const input=new Gtk.Box({spacing:8});
-    const entry=new Gtk.Entry({placeholder_text:'c2 / c2r3 / c2r3s4',hexpand:true});
+    const entry=new Gtk.Entry({placeholder_text:'Seat or @Intra ID',hexpand:true});
     const add=new Gtk.Button({label:'Add'});
     input.append(entry);input.append(add);box.append(input);
     const status=new Gtk.Label({label:'',wrap:true,xalign:0});box.append(status);
@@ -28,9 +28,10 @@ function open(parent,settings) {
         }
     });
     const submit=()=>{
-        const value=entry.get_text().trim().toLowerCase();
-        if(!/^c[1-9][0-9]*(?:r[1-9][0-9]*(?:s[1-9][0-9]*)?)?$/.test(value) || value.length>32){
-            status.label='Enter c2, c2r3, or c2r3s4.';return;
+        let value=entry.get_text().trim().toLowerCase();
+        if(!/^c[1-9][0-9]*(?:r[1-9][0-9]*(?:s[1-9][0-9]*)?)?$/.test(value) && /^@?[a-z0-9_-]{1,64}$/.test(value))value='@'+value.replace(/^@/,'');
+        if(!/^c[1-9][0-9]*(?:r[1-9][0-9]*(?:s[1-9][0-9]*)?)?$/.test(value) && !/^@[a-z0-9_-]{1,64}$/.test(value)){
+            status.label='Enter a cluster, row, seat, or @Intra ID.';return;
         }
         const rules=settings.get_strv('blocked-chat-seats');
         if(rules.includes(value)){status.label='Already blocked.';return;}

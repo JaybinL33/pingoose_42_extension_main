@@ -84,7 +84,21 @@ var Controller = class Controller {
                 avatar.set_child(image);
                 person.add_child(avatar);
                 const details = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-person-details'});
-                details.add_child(new St.Label({text: login ? `@${login}` : 'Awaiting match', style_class: 'pingoose-person-login'}));
+                if(login){
+                    const profileButton=new St.Button({label:`@${login}`,can_focus:true,x_align:Clutter.ActorAlign.START,style_class:'pingoose-counterpart-link'});
+                    const menu=new PopupMenu.PopupMenu(profileButton,1.0,St.Side.TOP);
+                    imports.ui.main.uiGroup.add_child(menu.actor);menu.actor.hide();
+                    this._optionsManager ||= new PopupMenu.PopupMenuManager(this._indicator);
+                    this._optionsManager.addMenu(menu);
+                    menu.addAction('Visit Profile Page',()=>{
+                        this._indicator.menu.close();
+                        this._send('service:open:'+JSON.stringify({name:login,url:'https://profile-v3.intra.42.fr/users/'+encodeURIComponent(login)}));
+                    });
+                    const parentSignal=this._indicator.menu.connect('open-state-changed',(_menu,open)=>{if(!open)menu.close();});
+                    profileButton.connect('destroy',()=>{this._indicator.menu.disconnect(parentSignal);this._optionsManager?.removeMenu(menu);menu.destroy();});
+                    profileButton.connect('clicked',()=>menu.toggle());
+                    details.add_child(profileButton);
+                }else details.add_child(new St.Label({text:'Awaiting match',style_class:'pingoose-person-login'}));
                 details.add_child(new St.Label({text: `Seat · ${login ? row.seats?.[login] || 'Unavailable' : 'Unavailable'}`, style_class: 'pingoose-person-seat'}));
                 person.add_child(details);
                 box.add_child(person);

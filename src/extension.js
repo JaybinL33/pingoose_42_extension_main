@@ -52,19 +52,20 @@ class Pingoose {
         this._renderEvaluations();
         this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); this._updateAgendaTimes(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
-        this._slotsExpanded = false;
+        this._slotsExpanded = this._settings.get_boolean('expand-slots');
         this._slots = [];
         this._slotDraft = null;
         this._slotCreateExpanded = false;
         this._indicator.visitIntra.connect('clicked', () => {
             this._slotsExpanded = !this._slotsExpanded;
+            this._settings.set_boolean('expand-slots',this._slotsExpanded);
             if (this._slotsExpanded) this._requestSlots('slots:list');
             else this._renderSlots();
         });
 
         this._settingsChanged = this._settings.connect('changed::flash-count', () => this._clearFlash());
         this._renderCards();
-        this._chatPanel = new Me.imports.ui.chatPanel.ChatPanel(this._indicator);
+        this._chatPanel = new Me.imports.ui.chatPanel.ChatPanel(this._indicator,command=>this._send(command));
         this._chatPanel.onAvailabilityChanged = () => this._renderEvaluations();
         this._servicePanel = new Me.imports.ui.servicePanel.ServicePanel(this._indicator, command => this._send(command));
         this._projectPanel = new Me.imports.ui.projectPanel.ProjectPanel(this._indicator, project => this._visitProject(project));
@@ -72,7 +73,8 @@ class Pingoose {
         this._sessionHook = new Me.imports.services.systemSessionHook.SystemSessionHook(
             (command, callback) => this._sessionSlotRequest(command, callback),
             () => !!this._process && !this._indicator.loginOnly,
-            () => this._settings.get_boolean('warn-open-slots-on-logout'));
+            () => this._settings.get_boolean('warn-open-slots-on-logout'),
+            () => this._evaluations || []);
         this._sessionHook.enable();
         this._startWorker();
         this._requestFullReset();
@@ -231,6 +233,7 @@ class Pingoose {
             }
             return;
         }
+        if(message.type==='chat-lookup'){this._chatPanel?.completeLookup(message);return;}
         if (message.type === 'slots') {
             if(this._refreshPending){
                 this._refreshSlotsDone=Array.isArray(message.rows) && !message.error;
@@ -261,7 +264,7 @@ class Pingoose {
         }
         if (message.type === 'agenda-action') {
             this._agendaBusy = null;
-            this._agendaActionStatus = {id: message.id, text: message.error || 'Subscription updated.'};
+            this._agendaActionStatus = {id: message.id, text: message.error || ''};
             this._renderAgenda();
             return;
         }
@@ -311,7 +314,7 @@ class Pingoose {
             else if (['authenticated', 'watching'].includes(message.state)) {
                 const wasLoginOnly = this._indicator.loginOnly;
                 this._indicator.setLoginOnly(false);
-                if (wasLoginOnly) {this._restoreCardState?.();this._renderCards();this._renderEvaluations();}
+                if (wasLoginOnly) {this._restoreCardState?.();this._renderCards();this._renderEvaluations();if(this._slotsExpanded)this._requestSlots('slots:list');}
             }
             this._indicator.status.label.text = message.state;
             return;

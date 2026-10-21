@@ -5,18 +5,42 @@ const ModalDialog = imports.ui.modalDialog;
 const EndSessionDialog = imports.ui.endSessionDialog;
 
 var SlotConfirmDialog = GObject.registerClass(class SlotConfirmDialog extends ModalDialog.ModalDialog {
-    _init(slots, onAction) {
+    _init(slots, onAction, evaluations = [], pendingFeedback = []) {
         super._init({styleClass: 'pingoose-modal-dialog'});
         this._onAction = onAction;
         this._decided = false;
+        this._hasSlots=slots.length>0;
         const box = new St.BoxLayout({vertical: true, style: 'width: 460px; spacing: 16px; padding: 16px;'});
         box.add_child(new St.Icon({icon_name: 'dialog-warning-symbolic', icon_size: 32}));
-        box.add_child(new St.Label({text: 'Open evaluation slots', style: 'font-weight: bold; font-size: 1.3em;'}));
-        const description = new St.Label({text: `You have ${slots.length} future ${slots.length === 1 ? 'slot' : 'slots'} open.\nClose them before logging out to avoid new matches.`, style: 'max-width: 460px;'});
-        description.clutter_text.line_wrap = true;
-        box.add_child(description);
-        for (const slot of slots.slice(0, 5)) box.add_child(new St.Label({text: new Date(slot.start).toLocaleString('en-GB')}));
-        if (slots.length > 5) box.add_child(new St.Label({text: `And ${slots.length - 5} more…`}));
+        box.add_child(new St.Label({text:'Check evaluations before logging out',style:'font-weight: bold; font-size: 1.3em;'}));
+        const list=new St.BoxLayout({vertical:true,style:'spacing: 10px;'});
+        const text=(value,red=false)=>{
+            const label=new St.Label({text:value,style:'max-width: 440px;'+(red?'color: #ef5350;':'')});
+            label.clutter_text.line_wrap=true;
+            list.add_child(label);
+        };
+        const format=value=>new Date(value).toLocaleString('en-GB');
+        text(`Open slots · ${slots.length}`);
+        for(const slot of slots)text(`${format(slot.start)} – ${format(slot.end)}`);
+        if(evaluations.length){
+            text(`Scheduled evaluations · ${evaluations.length}`,true);
+            for(const evaluation of evaluations)text(`${evaluation.project || 'Evaluation'}
+${format(evaluation.start)} – ${format(evaluation.end)}`,true);
+            text('Closing open slots does not cancel these evaluations.');
+        }
+        if(pendingFeedback.length){
+            text(`Feedback confirmation pending · ${pendingFeedback.length}`,true);
+            for(const evaluation of pendingFeedback){
+                const role=['evaluator','corrector'].includes(evaluation.kind)?'Evaluator':'Evaluatee';
+                text(`${evaluation.project || 'Evaluation'} · ${role}
+${format(evaluation.begin)}
+${(evaluation.users || []).map(login=>'@'+login).join(', ')}`,true);
+            }
+            text('These past evaluation cards have not been marked as feedback complete in Pingoose. Check Intra before leaving.');
+        }
+        const scroll=new St.ScrollView({style:'max-height: 260px;',overlay_scrollbars:false});
+        scroll.set_policy(St.PolicyType.NEVER,St.PolicyType.AUTOMATIC);
+        scroll.add_actor(list);box.add_child(scroll);
         this._status = new St.Label({text: '', style: 'max-width: 460px;'});
         this._status.clutter_text.line_wrap = true;
         box.add_child(this._status);
@@ -25,7 +49,7 @@ var SlotConfirmDialog = GObject.registerClass(class SlotConfirmDialog extends Mo
         this._deadline = GLib.get_monotonic_time() + 60000000;
         const tick = () => {
             const seconds = Math.max(0, Math.ceil((this._deadline - GLib.get_monotonic_time()) / 1000000));
-            this._status.text = `Logging out in ${seconds}s. Slots will stay open.`;
+            this._status.text = `Logging out in ${seconds}s. Open slots and scheduled evaluations will be kept.`;
             if (!seconds) { this._timer = 0; this._choose('keep'); return GLib.SOURCE_REMOVE; }
             return GLib.SOURCE_CONTINUE;
         };
@@ -59,8 +83,8 @@ var SlotConfirmDialog = GObject.registerClass(class SlotConfirmDialog extends Mo
 });
 
 var SystemSessionHook = class SystemSessionHook {
-    constructor(request, authenticated, warningEnabled = () => true) {
-        this._request = request; this._authenticated = authenticated; this._warningEnabled = warningEnabled;
+    constructor(request, authenticated, warningEnabled = () => true, evaluations = () => []) {
+        this._request = request; this._authenticated = authenticated; this._warningEnabled = warningEnabled; this._evaluations=evaluations;
     }
     enable() {
         const proto = EndSessionDialog.EndSessionDialog.prototype;
@@ -81,19 +105,21 @@ var SystemSessionHook = class SystemSessionHook {
                     Main.notify('42Intra', 'Unable to check evaluation slots. Check Intra before leaving.');
                     proceed(); return;
                 }
-                const future = result.rows.filter(slot => Date.parse(slot.start) > Date.now());
-                if (!future.length) { proceed(); return; }
-                Main.notify('42Intra · Open evaluation slots', 'Choose whether to close your slots before logging out.');
+                const future = result.rows.filter(slot => !slot.matched && Date.parse(slot.end) > Date.now());
+                const evaluations=result.rows.filter(slot=>slot.matched && Date.parse(slot.end)>Date.now());
+                const pendingFeedback=hook._evaluations().filter(row=>!row.missing && !row.devTest && Number.isFinite(Date.parse(row.begin)) && Date.parse(row.begin)<=Date.now());
+                if (!future.length && !evaluations.length && !pendingFeedback.length) { proceed(); return; }
+                Main.notify('42Intra · Open evaluation slots', 'Check open slots and scheduled evaluations before logging out.');
                 hook._dialog = new SlotConfirmDialog(future, action => {
                     if (action === 'keep') proceed();
                     else if (action === 'cancel') { hook._finish(); this.cancel(); }
                     else hook._request('slots:future', response => {
                         if (!hook._pending) return;
-                        if (response.error || !Array.isArray(response.rows) || response.rows.some(slot => Date.parse(slot.start) > Date.now()))
+                        if (response.error || !Array.isArray(response.rows) || response.rows.some(slot => !slot.matched && Date.parse(slot.end) > Date.now()))
                             hook._dialog.failed();
                         else proceed();
                     });
-                });
+                }, evaluations, pendingFeedback);
                 if (!hook._dialog.open()) { hook._finish(); this.cancel(); }
             });
         };

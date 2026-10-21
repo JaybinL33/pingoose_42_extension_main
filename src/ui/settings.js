@@ -47,7 +47,7 @@ var Controller = class Controller {
         Main.uiGroup.add_child(settings.actor);
         settings.actor.hide();
         this._optionsMenu = settings;
-        this._optionsManager = new PopupMenu.PopupMenuManager(indicator);
+        this._optionsManager ||= new PopupMenu.PopupMenuManager(indicator);
         this._optionsManager.addMenu(settings);
         settings.addAction('Visit 42 Intra', () => { indicator.menu.close(); this._send('show'); });
         settings.addAction('Refresh', () => {
@@ -111,13 +111,21 @@ var Controller = class Controller {
         });
         sync(); this._applyPanelLayout();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
-            if (!open) settings.close();
+            if (!open) {
+                settings.close();
+                if(this._settings.get_boolean('auto-close-panels')){
+                    if(this._servicePanel){this._servicePanel.expanded=false;this._servicePanel.sync();}
+                    if(this._projectPanel){this._projectPanel.capture();this._projectPanel.expanded=false;this._projectPanel.sync();}
+                    if(this._chatPanel){this._chatPanel._expanded=false;this._chatPanel.sync();}
+                }
+            }
             if (open) {
                 settings.close();
                 this._slotCreateExpanded=false;
                 this._slotDraft=null;
                 this._agendaExpanded?.clear();
                 this._renderSlots();
+                if(this._slotsExpanded && !indicator.loginOnly)this._requestSlots('slots:list');
                 this._renderAgenda();
                 showMain();
                 this._unreadIds.clear();

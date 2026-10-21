@@ -6,6 +6,9 @@ function build(settings) {
     theme.append('dark','Dark'); theme.append('light','Light');
     settings.bind('theme',theme,'active-id',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Color mode',theme);
+    const autoClose=new Gtk.Switch({valign:Gtk.Align.CENTER});
+    settings.bind('auto-close-panels',autoClose,'active',Gio.SettingsBindFlags.DEFAULT);
+    Common.row(box,'Auto-close side panels',autoClose);
     box.append(new Gtk.Separator());
     const agendaReset=new Gtk.Button({label:'Agenda Reset'});
     agendaReset.connect('clicked',()=>Common.confirm(box,'Reset agenda cards?',

@@ -178,7 +178,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         evaluationItem.remove_all_children();
         evaluationItem.add_style_class_name('pingoose-scroll-container');
         const evaluationArea = new St.BoxLayout({vertical: true, x_expand: true});
-        this.evaluationToggle=this._sectionToggle('Evaluation Info',evaluationScroll);
+        this.evaluationToggle=this._sectionToggle('Evaluation Info',evaluationScroll,'expand-evaluations');
         evaluationArea.add_child(this.evaluationToggle);
         evaluationArea.add_child(evaluationScroll);
         evaluationItem.add_child(evaluationArea);
@@ -195,7 +195,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.agendaItem.remove_all_children();
         this.agendaItem.add_style_class_name('pingoose-scroll-container');
         const agendaArea=new St.BoxLayout({vertical:true,x_expand:true});
-        this.agendaToggle=this._sectionToggle('Agenda',agendaScroll);
+        this.agendaToggle=this._sectionToggle('Agenda',agendaScroll,'expand-agenda');
         agendaArea.add_child(this.agendaToggle);agendaArea.add_child(agendaScroll);
         this.agendaItem.add_child(agendaArea);
         this.menu.addMenuItem(this.agendaItem);
@@ -209,7 +209,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         listItem.remove_all_children();
         listItem.add_style_class_name('pingoose-list-container');
         const notificationArea = new St.BoxLayout({vertical: true, x_expand: true});
-        this.notificationToggle=this._sectionToggle('Notifications',list);
+        this.notificationToggle=this._sectionToggle('Notifications',list,'expand-notifications');
         notificationArea.add_child(this.notificationToggle);
         notificationArea.add_child(list);
         listItem.add_child(notificationArea);
@@ -224,10 +224,11 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.setLoginOnly(true);
     }
 
-    _sectionToggle(title,content) {
+    _sectionToggle(title,content,key) {
+        const preferences=imports.misc.extensionUtils.getSettings();
         const button=new St.Button({can_focus:true,x_expand:true,style_class:'pingoose-visit-intra pingoose-section-toggle'});
         button.set_child(new St.Label({text:title,x_expand:true,x_align:Clutter.ActorAlign.CENTER}));
-        button.expanded=true;
+        button.expanded=key ? preferences.get_boolean(key) : true;
         button.updateCount=count=>{
             button.get_child().text=`${title}${count ? ' · '+count : ''}`;
             button.style_class='pingoose-visit-intra pingoose-section-toggle'+(button.expanded ? ' pingoose-toggle-active' : '');
@@ -236,6 +237,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         };
         button.connect('clicked',()=>{
             button.expanded=!button.expanded;
+            if(key)preferences.set_boolean(key,button.expanded);
             button.updateCount(button.sectionCount);
         });
         button.updateCount(0);

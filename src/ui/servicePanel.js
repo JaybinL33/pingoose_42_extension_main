@@ -8,7 +8,7 @@ var ServicePanel = class ServicePanel {
         this.send = send;
         this.indicator = indicator;
         this.settings = imports.misc.extensionUtils.getSettings();
-        this.expanded = false;
+        this.expanded = this.settings.get_boolean('expand-services');
         this.previews = new Set();
         this.root = new St.BoxLayout({vertical: true, reactive: true, visible: false,
             y_expand: false, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-chat-panel pingoose-service-panel'});
@@ -41,6 +41,7 @@ var ServicePanel = class ServicePanel {
         this.render(); this.sync();
     }
     sync() {
+        if(this.settings.get_boolean('expand-services')!==this.expanded)this.settings.set_boolean('expand-services',this.expanded);
         const visible = !this.indicator.loginOnly && this.settings.get_boolean('service-enabled') && this.settings.get_boolean('show-services');
         this.item.visible=visible;
         this.root.visible=visible && this.expanded;
