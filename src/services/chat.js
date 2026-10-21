@@ -72,7 +72,7 @@ var ChatService = class ChatService {
             if(!peer.scope || Policy.allowed(policy,peer.key,peer.scope))continue;
             const old=(previous.grants || []).find(grant=>grant.id===peer.scope && grant.seat===peer.key);
             const session=old && sessions.find(item=>item.id===old.id && item.login===old.login);
-            const saved=session && !peer.background?{...session,seat:peer.key,history:[...peer.history],unread:peer.unread}:null;
+            const saved=session && !peer.background?{...session,seat:peer.key,history:[...peer.history],unread:peer.unread,connectionAnnounced:peer.connectionAnnounced}:null;
             this.close(peer.key);
             if(saved)this._evaluationChats.set(saved.id+':'+saved.login,saved);
         }
@@ -85,7 +85,7 @@ var ChatService = class ChatService {
             this._evaluationChats.delete(key);
             const seat=this.open(grant.seat,grant.id);
             const peer=seat && this.peer(seat);
-            if(peer){peer.history=[...saved.history,...peer.history].slice(-MAX_HISTORY);peer.unread=saved.unread;this.emit('peer-changed',seat);}
+            if(peer){peer.history=[...saved.history,...peer.history].slice(-MAX_HISTORY);peer.unread=saved.unread;peer.connectionAnnounced=saved.connectionAnnounced;this.emit('peer-changed',seat);}
         }
     }
     _grantKey(grant) { return JSON.stringify([grant.id, grant.login, grant.seat, grant.expires]); }
@@ -288,6 +288,12 @@ var ChatService = class ChatService {
         return !this._destroyed && this._peers.get(peer.key) === peer;
     }
 
+    _announceConnection(peer, text) {
+        if (peer.background || peer.connectionAnnounced) return;
+        peer.connectionAnnounced = true;
+        this._record(peer, 'sys', text);
+    }
+
     _record(peer, dir, text) {
         if (!this._alive(peer) || this.isBlocked(peer.key)) return;
         if (peer.background && dir === 'sys') return;
@@ -329,7 +335,7 @@ var ChatService = class ChatService {
                 return;
             }
             this._connections++;
-            this._record(peer, 'sys', `Connected to ${peer.host}`);
+            this._announceConnection(peer, `Connected to ${peer.host}`);
             this._attach(peer, conn, true);
         });
     }
@@ -362,7 +368,7 @@ var ChatService = class ChatService {
                 return;
             }
             const peer = this._peer(peerKey(name ?? ip), name ?? ip);
-            this._record(peer, 'sys', `Connection from ${name ?? ip}`);
+            this._announceConnection(peer, `Connection from ${name ?? ip}`);
             this._attach(peer, conn);
         };
         if (address.get_is_loopback()) {
@@ -491,7 +497,7 @@ var ChatService = class ChatService {
             const unsent=peer.queue.length;
             peer.queue=[];
             peer.writing=false;
-            this._record(peer, 'sys', authorized ? 'Disconnected. Send a new message to reconnect.' :
+            if (!authorized) this._record(peer, 'sys',
                 'Connection unavailable or chat is disabled on the other seat.');
             if(unsent)this._record(peer,'sys',`${unsent} message(s) were not sent. Automatic retry stopped.`);
             // Only an explicit open/send may reconnect; a rejected handshake must never loop.
