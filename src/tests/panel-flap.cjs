@@ -10,11 +10,12 @@ class Signals {
     emit(name) { for (const handler of this.handlers.values()) if (handler.name === name) handler.callback(); }
 }
 const settings = Object.assign(new Signals(), {enable_animations: true});
+const preferences=Object.assign(new Signals(),{active:true,get_boolean(){return this.active;}});
 const timers = new Map();
 const icons = [];
 let now = 1000000, nextTimer = 1;
 const context = {
-    imports: {misc: {extensionUtils: {getCurrentExtension: () => ({path: path.resolve('src')})}}},
+    imports: {misc: {extensionUtils: {getSettings:()=>preferences,getCurrentExtension: () => ({path: path.resolve('src')})}}},
     Gio: {
         File: {new_for_path: file => file},
         FileIcon: class { constructor({file}) { this.file = file; icons.push(this); } },
@@ -52,6 +53,8 @@ assert.equal(timers.size, 0, 'unmapped icon does not wake Shell');
 indicator.icon.mapped = true;
 indicator.icon.emit('notify::mapped');
 assert.equal(timers.size, 1);
+preferences.active=false;preferences.emit('changed::topbar-animation');assert.equal(timers.size,0);
+preferences.active=true;preferences.emit('changed::topbar-animation');assert.equal(timers.size,1);
 const started = now;
 for (let frame = 1; frame <= 12; frame++) {
     now = started + frame * 67000;

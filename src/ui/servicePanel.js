@@ -25,6 +25,7 @@ var ServicePanel = class ServicePanel {
         this.item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this.item.remove_all_children(); this.item.add_style_class_name('pingoose-overview-item');
         const button = new St.Button({label: '42 Services', can_focus: true, x_expand: true, style_class: 'pingoose-visit-intra'});
+        this.button=button;
         button.connect('clicked', () => { this.expanded=!this.expanded; if(this.expanded)this.indicator.bringPanelNearMain(this.root); this.sync(); });
         this.item.add_child(button); indicator.menu.addMenuItem(this.item);
         this.signal = this.settings.connect('changed', (_s,key) => {
@@ -43,6 +44,7 @@ var ServicePanel = class ServicePanel {
         const visible = !this.indicator.loginOnly && this.settings.get_boolean('service-enabled') && this.settings.get_boolean('show-services');
         this.item.visible=visible;
         this.root.visible=visible && this.expanded;
+        this.button.style_class='pingoose-visit-intra'+(this.root.visible ? ' pingoose-toggle-active' : '');
         this.indicator.syncPanelLayout?.();
         if (this.root.visible && this.indicator.menu.isOpen) this.loadPreviews();
     }

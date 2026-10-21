@@ -148,7 +148,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         visitItem.add_style_class_name('pingoose-visit-row');
         this.visitIntra = new St.Button({can_focus: true,
             x_expand: true, x_align: Clutter.ActorAlign.FILL, style_class: 'pingoose-visit-intra'});
-        this.visitIntra.set_child(new St.Label({text: 'Evaluation Slots ▾', x_expand: true,
+        this.visitIntra.set_child(new St.Label({text: 'Evaluation Slots', x_expand: true,
             x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER}));
         visitItem.add_child(this.visitIntra);
         this.menu.addMenuItem(visitItem);
@@ -178,7 +178,8 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         evaluationItem.remove_all_children();
         evaluationItem.add_style_class_name('pingoose-scroll-container');
         const evaluationArea = new St.BoxLayout({vertical: true, x_expand: true});
-        evaluationArea.add_child(new St.Label({text: 'Evaluation Info', style_class: 'pingoose-heading pingoose-fixed-heading'}));
+        this.evaluationToggle=this._sectionToggle('Evaluation Info',evaluationScroll);
+        evaluationArea.add_child(this.evaluationToggle);
         evaluationArea.add_child(evaluationScroll);
         evaluationItem.add_child(evaluationArea);
         this.evaluationItem = evaluationItem;
@@ -186,13 +187,17 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.evaluationSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this.evaluationSeparator);
         this.agenda = new PopupMenu.PopupMenuSection();
-        const agendaScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-agenda-scroll', overlay_scrollbars: false});
+        const agendaScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-agenda-scroll', can_focus: true, overlay_scrollbars: false});
         agendaScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         agendaScroll.add_actor(this.agenda.actor);
+        this.agendaScroll = agendaScroll;
         this.agendaItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
         this.agendaItem.remove_all_children();
         this.agendaItem.add_style_class_name('pingoose-scroll-container');
-        this.agendaItem.add_child(agendaScroll);
+        const agendaArea=new St.BoxLayout({vertical:true,x_expand:true});
+        this.agendaToggle=this._sectionToggle('Agenda',agendaScroll);
+        agendaArea.add_child(this.agendaToggle);agendaArea.add_child(agendaScroll);
+        this.agendaItem.add_child(agendaArea);
         this.menu.addMenuItem(this.agendaItem);
         this.agendaSeparator = new PopupMenu.PopupSeparatorMenuItem();
         this.menu.addMenuItem(this.agendaSeparator);
@@ -204,7 +209,8 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         listItem.remove_all_children();
         listItem.add_style_class_name('pingoose-list-container');
         const notificationArea = new St.BoxLayout({vertical: true, x_expand: true});
-        notificationArea.add_child(new St.Label({text: 'Notifications', style_class: 'pingoose-heading pingoose-fixed-heading'}));
+        this.notificationToggle=this._sectionToggle('Notifications',list);
+        notificationArea.add_child(this.notificationToggle);
         notificationArea.add_child(list);
         listItem.add_child(notificationArea);
         this.notificationItem = listItem;
@@ -218,6 +224,24 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         this.setLoginOnly(true);
     }
 
+    _sectionToggle(title,content) {
+        const button=new St.Button({can_focus:true,x_expand:true,style_class:'pingoose-visit-intra pingoose-section-toggle'});
+        button.set_child(new St.Label({text:title,x_expand:true,x_align:Clutter.ActorAlign.CENTER}));
+        button.expanded=true;
+        button.updateCount=count=>{
+            button.get_child().text=`${title}${count ? ' · '+count : ''}`;
+            button.style_class='pingoose-visit-intra pingoose-section-toggle'+(button.expanded ? ' pingoose-toggle-active' : '');
+            button.sectionCount=count;
+            content.visible=button.expanded;
+        };
+        button.connect('clicked',()=>{
+            button.expanded=!button.expanded;
+            button.updateCount(button.sectionCount);
+        });
+        button.updateCount(0);
+        return button;
+    }
+
     _initFlapIcon() {
         const path = imports.misc.extensionUtils.getCurrentExtension().path;
         const frames = Array.from({length: 12}, (_, index) => new Gio.FileIcon({
@@ -225,6 +249,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         }));
         this.icon = new St.Icon({gicon: frames[0], icon_size: 24, style_class: 'system-status-icon'});
         const settings = St.Settings.get();
+        const preferences = imports.misc.extensionUtils.getSettings();
         let timer = 0;
         const stop = () => {
             if (timer) GLib.source_remove(timer);
@@ -233,7 +258,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         const sync = () => {
             stop();
             this.icon.gicon = frames[0];
-            if (!settings.enable_animations || !this.icon.mapped) return;
+            if (!preferences.get_boolean('topbar-animation') || !settings.enable_animations || !this.icon.mapped) return;
             const started = GLib.get_monotonic_time();
             // The supplied flap sequence is 12 frames over 800 ms; skip stale frames after a stall.
             timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 67, () => {
@@ -243,10 +268,12 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
             });
         };
         const signal = settings.connect('notify::enable-animations', sync);
+        const preferenceSignal = preferences.connect('changed::topbar-animation', sync);
         this.icon.connect('notify::mapped', sync);
         this.icon.connect('destroy', () => {
             stop();
             settings.disconnect(signal);
+            preferences.disconnect(preferenceSignal);
         });
         sync();
     }

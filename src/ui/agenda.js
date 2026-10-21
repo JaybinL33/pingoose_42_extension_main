@@ -1,67 +1,128 @@
-const {Clutter, Pango, St} = imports.gi;
+const {Clutter, GLib, Meta, Pango, St} = imports.gi;
 const PopupMenu = imports.ui.popupMenu;
+const Agenda = imports.misc.extensionUtils.getCurrentExtension().imports.models.evaluations;
 
 var Controller = class Controller {
+    _updateAgendaTimes() {
+        for (const {label, row} of this._agendaTimes || []) label.text = Agenda.agendaSummary(row).slice(11);
+    }
+
     _renderAgenda() {
+        this._agendaTimes = [];
         this._syncOptionalSections();
+        const scroll=this._indicator.agendaScroll;
+        const adjustment=scroll?.get_vscroll_bar().get_adjustment();
+        const position=this._agendaScrollPosition ?? adjustment?.value ?? 0;
+        if(this._agendaScrollRestore)Meta.later_remove(this._agendaScrollRestore);
+        this._agendaScrollRestore=0;
+        if(adjustment){
+            this._agendaScrollPosition=position;
+            this._agendaScrollRestore=Meta.later_add(Meta.LaterType.BEFORE_REDRAW,()=>{
+                this._agendaScrollRestore=0;
+                adjustment.value=Math.max(adjustment.lower,Math.min(position,adjustment.upper-adjustment.page_size));
+                this._agendaScrollPosition=null;
+                return GLib.SOURCE_REMOVE;
+            });
+        }
         const section = this._indicator.agenda;
         section.removeAll();
         if (!this._agenda?.length) return;
-        const title = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
-        title.remove_all_children();
-        title.set_style('padding-left: 0;');
-        title.add_child(new St.Label({text: 'Agenda', style_class: 'pingoose-heading'}));
-        section.addMenuItem(title);
         for (const row of this._agenda) {
             const item = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
             item.remove_all_children();
             item.set_style('padding: 6px 0; spacing: 0;');
-            const box = new St.BoxLayout({vertical: true, x_expand: false, x_align: Clutter.ActorAlign.START, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card pingoose-agenda-card'});
+            const box = new St.BoxLayout({vertical: true, request_mode:Clutter.RequestMode.HEIGHT_FOR_WIDTH, x_expand: false, x_align: Clutter.ActorAlign.START, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-evaluation-card pingoose-agenda-card'});
+            const heading=new St.BoxLayout({vertical:true,style_class:'pingoose-agenda-heading-group'});
+            box.add_child(heading);
             {
                 const header=new St.BoxLayout({x_expand:true});
                 const title=new St.Label({text:row.name,x_expand:true,style_class:'pingoose-evaluation-title'});
-                title.clutter_text.line_wrap=true;header.add_child(title);
+                title.clutter_text.line_wrap=true; title.clutter_text.ellipsize=Pango.EllipsizeMode.NONE; header.add_child(title);
+                if(row.feedback || row.subscribed) header.add_child(new St.Label({text:row.feedback ? 'Feedback required' : 'Subscribed',style_class:row.feedback ? 'pingoose-agenda-feedback-required' : 'pingoose-agenda-subscribed',y_align:Clutter.ActorAlign.CENTER}));
                 const remove=new St.Button({label:'⋮',accessible_name:'Agenda options',can_focus:true,
                     style_class:'pingoose-note-options',x_align:Clutter.ActorAlign.END,y_align:Clutter.ActorAlign.CENTER});
-                remove.connect('clicked',()=>{this._agendaOptions=this._agendaOptions===row.id?null:row.id;this._agendaConfirm=null;this._renderAgenda();});
-                header.add_child(remove);box.add_child(header);
-            }
-            for (const text of [ `${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`, row.location,
-                row.feedback ? 'Feedback pending' : ''].filter(Boolean)) {
-                const label = new St.Label({text});
-                label.clutter_text.line_wrap = true;
-                label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
-                box.add_child(label);
-            }
-            if(this._agendaOptions===row.id && this._agendaConfirm!==row.id){
-                const remove=new St.Button({label:'Delete',can_focus:true,style_class:'pingoose-clear-button'});
-                remove.connect('clicked',()=>{this._agendaOptions=null;this._agendaConfirm=row.id;this._renderAgenda();});
-                box.add_child(remove);
-            }
-            if(this._agendaConfirm===row.id){
-                box.add_child(new St.Label({text:'Have you checked this agenda?',style_class:'pingoose-feedback-question pingoose-agenda-question'}));
-                const actions=new St.BoxLayout({style_class:'pingoose-feedback-actions',x_expand:true});
-                const yes=new St.Button({label:'Yes',can_focus:true,x_expand:true,style_class:'pingoose-feedback-button pingoose-feedback-half'});
-                yes.connect('clicked',()=>{
-                    this._dismissedAgendaIds ||= new Set();
-                    if (row.devTest) {
-                        this._agendaAll=(this._agendaAll || []).filter(item=>item.id!==row.id);
-                        this._dismissedAgendaIds.delete(String(row.id));
-                    } else {
-                        this._dismissedAgendaIds.add(String(row.id));
-                    }
-                    this._agenda=this._agenda.filter(item=>item.id!==row.id);
-                    this._agendaConfirm=null;this._agendaOptions=null;
-                    this._settings.set_strv('dismissed-agenda-ids',[...this._dismissedAgendaIds]);
-                    this._renderAgenda();
+                const options=new PopupMenu.PopupMenu(remove,1.0,St.Side.TOP);
+                imports.ui.main.uiGroup.add_child(options.actor);
+                options.actor.hide();
+                this._optionsManager.addMenu(options);
+                options.addAction('Hide Agenda',()=>{options.close();this._hideAgenda(row);});
+                const parentSignal=this._indicator.menu.connect('open-state-changed',(_menu,open)=>{if(!open)options.close();});
+                remove.connect('destroy',()=>{
+                    this._indicator.menu.disconnect(parentSignal);
+                    this._optionsManager?.removeMenu(options);
+                    options.destroy();
                 });
-                const cancel=new St.Button({label:'No',can_focus:true,x_expand:true,style_class:'pingoose-feedback-button pingoose-feedback-half'});
-                cancel.connect('clicked',()=>{this._agendaConfirm=null;this._renderAgenda();});
-                actions.add_child(yes);actions.add_child(cancel);box.add_child(actions);
+                remove.connect('clicked',()=>options.toggle());
+                header.add_child(remove);heading.add_child(header);
+            }
+            let textContainer=box;
+            const text = (value,emphasized=false) => {
+                const label = new St.Label({text: value, width:392, x_expand:true, y_expand:false, request_mode:Clutter.RequestMode.HEIGHT_FOR_WIDTH, style_class: 'pingoose-agenda-detail'+(emphasized ? ' pingoose-agenda-emphasis' : '')});
+                label.clutter_text.line_wrap = true;
+                label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+                label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+                textContainer.add_child(label); return label;
+            };
+            const summaryRow=new St.BoxLayout({style_class:'pingoose-agenda-summary'});
+            const summaryText=Agenda.agendaSummary(row);
+            summaryRow.add_child(new St.Label({text:summaryText.slice(0,10),style_class:'pingoose-agenda-emphasis'}));
+            const summary=new St.Label({text:summaryText.slice(11),style_class:'pingoose-agenda-detail'});
+            summaryRow.add_child(summary);heading.add_child(summaryRow);
+            this._agendaTimes.push({label: summary, row});
+            const expanded = this._agendaExpanded?.has(row.id);
+            const more = new St.Button({label: 'Details', can_focus: true, style_class: 'pingoose-clear-button'+(expanded ? ' pingoose-toggle-active' : '')});
+            more.connect('clicked', () => {
+                this._agendaExpanded ||= new Set();
+                if (this._agendaExpanded.has(row.id)) this._agendaExpanded.delete(row.id);
+                else this._agendaExpanded.add(row.id);
+                details.visible=this._agendaExpanded.has(row.id);
+                more.style_class='pingoose-clear-button'+(details.visible ? ' pingoose-toggle-active' : '');
+            });
+            box.add_child(more);
+            const details=new St.BoxLayout({vertical:true,request_mode:Clutter.RequestMode.HEIGHT_FOR_WIDTH,x_expand:true,y_expand:false,visible:!!expanded,style_class:'pingoose-agenda-details'});
+            box.add_child(details);
+            textContainer=details;
+            {
+                text(`${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`,true);
+                if (row.location) text(`Location: ${row.location}`,true);
+                text(`Subscribed: ${row.subscribers ?? 'Unknown'} / ${row.capacity > 0 ? row.capacity : row.capacity === null || row.capacity === undefined ? 'Unknown' : 'Unlimited'}`,true);
+                if (row.unsubscriptionDelay > 0) text(`Cancellation deadline: ${new Date(Date.parse(row.begin)-row.unsubscriptionDelay*3600000).toLocaleString('en-GB')}`);
+                if (row.description) text(row.description);
+                if (row.kind === 'exam') text('Register for both the exam session and the exam project to attend.');
+                if (this._agendaActionStatus?.id === row.id) text(this._agendaActionStatus.text);
+                const action = row.subscribed ? 'unsubscribe' : 'subscribe';
+                if (Agenda.agendaAction(row, action)) {
+                    const busy = this._agendaBusy === row.id;
+                    const button = new St.Button({label: busy ? 'Updating…' : row.subscribed ? 'Unsubscribe' : 'Subscribe', reactive: !this._agendaBusy, can_focus: !this._agendaBusy, style_class: 'pingoose-clear-button'});
+                    button.connect('clicked', () => {
+                        if (this._agendaBusy) return;
+                        if(adjustment)this._agendaScrollPosition=adjustment.value;
+                        this._agendaBusy = row.id; this._agendaActionStatus = null;
+                        this._send(`agenda:${action}:${row.id}`); button.label='Updating…'; button.reactive=false;
+                    });
+                    const footer=new St.BoxLayout({vertical:true,x_expand:true,y_expand:false,style_class:'pingoose-agenda-actions'});
+                    footer.add_child(button);
+                    details.add_child(footer);
+                }
+
             }
             item.add_child(box);
             section.addMenuItem(item);
         }
+    }
+
+    _hideAgenda(row) {
+        const adjustment=this._indicator.agendaScroll?.get_vscroll_bar().get_adjustment();
+        if(adjustment)this._agendaScrollPosition=adjustment.value;
+        this._indicator.agendaScroll?.grab_key_focus();
+        this._dismissedAgendaIds ||= new Set();
+        if(row.devTest){
+            this._agendaAll=(this._agendaAll || []).filter(item=>item.id!==row.id);
+            this._dismissedAgendaIds.delete(String(row.id));
+        }else this._dismissedAgendaIds.add(String(row.id));
+        this._agenda=this._agenda.filter(item=>item.id!==row.id);
+        this._settings.set_strv('dismissed-agenda-ids',[...this._dismissedAgendaIds]);
+        this._renderAgenda();
     }
 
     _restoreAgenda() {

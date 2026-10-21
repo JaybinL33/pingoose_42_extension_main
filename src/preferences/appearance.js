@@ -3,6 +3,9 @@ const Common = imports.misc.extensionUtils.getCurrentExtension().imports.prefere
 const Order = imports.misc.extensionUtils.getCurrentExtension().imports.models.appearance;
 function build(settings) {
     const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 12});
+    const animation=new Gtk.Switch({valign:Gtk.Align.CENTER});
+    settings.bind('topbar-animation',animation,'active',Gio.SettingsBindFlags.DEFAULT);
+    Common.row(box,'Top Bar Animation',animation);
     box.append(new Gtk.Label({label: 'Show or hide cards and use the arrows to change their order.\nMy Projects and Logtime share one row. Hidden cards keep their position. Use Apply to save the new order.', xalign: 0, wrap: true}));
     const list = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 10});
     const scroll = new Gtk.ScrolledWindow({vexpand: true, min_content_height: 360,

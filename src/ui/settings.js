@@ -113,7 +113,13 @@ var Controller = class Controller {
         indicator.menu.connect('open-state-changed', (_menu, open) => {
             if (!open) settings.close();
             if (open) {
-                settings.close(); showMain();
+                settings.close();
+                this._slotCreateExpanded=false;
+                this._slotDraft=null;
+                this._agendaExpanded?.clear();
+                this._renderSlots();
+                this._renderAgenda();
+                showMain();
                 this._unreadIds.clear();
                 for (const notification of this._notifications) notification.unread = false;
                 this._saveCardState();

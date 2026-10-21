@@ -72,6 +72,9 @@ var Controller = class Controller {
             indicator.studyColumn.visible = enabled('logtime');
             indicator.overviewItem.visible = !indicator.loginOnly && (enabled('projects') || enabled('logtime'));
         }
+        indicator.evaluationToggle?.updateCount(this._evaluations?.length || 0);
+        indicator.agendaToggle?.updateCount(this._agenda?.length || 0);
+        indicator.notificationToggle?.updateCount(this._notifications?.length || 0);
         const evaluationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._evaluations?.length && enabled('evaluations');
         const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length && enabled('notifications');
         const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length && enabled('agenda');

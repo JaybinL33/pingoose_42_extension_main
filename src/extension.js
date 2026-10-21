@@ -44,15 +44,18 @@ class Pingoose {
         this._writing = false;
         this._notifications = [];
         this._unreadIds = new Set();
+        this._agendaBusy = null; this._agendaActionStatus = null; this._agendaExpanded = new Set();
         this._agenda = [];this._agendaAll=[];this._dismissedAgendaIds=new Set(this._settings.get_strv('dismissed-agenda-ids'));
         this._evaluations = [];
         this._feedback = {};
         this._restoreCardState();
         this._renderEvaluations();
-        this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); return GLib.SOURCE_CONTINUE; });
+        this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); this._updateAgendaTimes(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
         this._slotsExpanded = false;
         this._slots = [];
+        this._slotDraft = null;
+        this._slotCreateExpanded = false;
         this._indicator.visitIntra.connect('clicked', () => {
             this._slotsExpanded = !this._slotsExpanded;
             if (this._slotsExpanded) this._requestSlots('slots:list');
@@ -110,11 +113,14 @@ class Pingoose {
         this._projectPanel?.reset();
         this._chatPanel?.reset();
         this._slots = [];
+        this._slotDraft = null;
+        this._slotCreateExpanded = false;
         this._slotsExpanded = false;
         this._slotsBusy = false;
         this._slotsError = null;
         this._renderSlots();
         const indicator = this._indicator;
+        this._agendaBusy = null; this._agendaActionStatus = null; this._agendaExpanded = new Set();
         this._agenda = [];this._agendaAll=[];this._dismissedAgendaIds=new Set(this._settings.get_strv('dismissed-agenda-ids'));
         this._evaluations = [];
         this._feedback = {};
@@ -236,6 +242,11 @@ class Pingoose {
             if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
             this._sessionSlotsTimer = 0;
             this._slotsBusy = false;
+            if(this._slotCreating && !message.error && message.created>0){
+                this._slotCreateExpanded=false;
+                this._slotDraft=null;
+            }
+            this._slotCreating=false;
             if (Array.isArray(message.rows) && message.rows.length <= 1000) this._slots = message.rows;
             this._slotsError = typeof message.error === 'string' ? message.error.slice(0, 200) : null;
             this._renderSlots();
@@ -246,6 +257,12 @@ class Pingoose {
             const id = message.id;
             delete this._feedback[id];
             this._renderCards();
+            return;
+        }
+        if (message.type === 'agenda-action') {
+            this._agendaBusy = null;
+            this._agendaActionStatus = {id: message.id, text: message.error || 'Subscription updated.'};
+            this._renderAgenda();
             return;
         }
         if (message.type === 'agenda' && Array.isArray(message.rows) && message.rows.length <= 100) {
@@ -341,6 +358,9 @@ class Pingoose {
         if (this._evaluationScrollRestore) Meta.later_remove(this._evaluationScrollRestore);
         this._evaluationScrollRestore = 0;
         this._evaluationScrollPosition = null;
+        if (this._agendaScrollRestore) Meta.later_remove(this._agendaScrollRestore);
+        this._agendaScrollRestore = 0;
+        this._agendaScrollPosition = null;
         this._sessionHook?.disable();
         this._sessionHook = null;
         if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);

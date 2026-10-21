@@ -34,7 +34,18 @@ async function slotRequest(action, expected, payload) {
         const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
         if (!csrf) throw new Error('Slot session expired. Open Intra and try again.');
         const slotsToCreate = Array.isArray(payload) ? payload : [payload];
-        if(!slotsToCreate.length || slotsToCreate.length>20 || slotsToCreate.some(item=>!item || !Number.isFinite(Date.parse(item.begin)) || !Number.isFinite(Date.parse(item.end)) || Date.parse(item.end)-Date.parse(item.begin)<900000 || Date.parse(item.end)-Date.parse(item.begin)>14400000 || (Date.parse(item.end)-Date.parse(item.begin))%900000!==0))throw new Error('Invalid slot schedule.');
+        if(!slotsToCreate.length || slotsToCreate.length>20 || slotsToCreate.some(item=>!item || !Number.isFinite(Date.parse(item.begin)) || !Number.isFinite(Date.parse(item.end)) || Date.parse(item.end)-Date.parse(item.begin)<900000 || (action==='create-5' && Date.parse(item.end)-Date.parse(item.begin)>14400000) || (Date.parse(item.end)-Date.parse(item.begin))%900000!==0))throw new Error('Invalid slot schedule.');
+        if(action==='create'){
+            if(slotsToCreate.length!==1)throw new Error('Create one slot at a time.');
+            const begin=Date.parse(slotsToCreate[0].begin),end=Date.parse(slotsToCreate[0].end);
+            if(begin<Date.now()+1800000 || end>Date.now()+7*86400000 || begin%900000 || end%900000)
+                return {rows,error:'Start at least 30 minutes from now on a 15-minute boundary, within 7 days.'};
+            const conflict=rows.find(row=>Date.parse(row.start)<end && Date.parse(row.end)>begin);
+            if(conflict){
+                const format=value=>new Date(value).toLocaleString('en-GB',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+                return {rows,error:`Could not create slot:\nOverlaps ${format(conflict.start)} – ${format(conflict.end)}.`};
+            }
+        }
         let createdCount = 0, skipped=0, failed=0;
         for (const item of slotsToCreate) {
             if(rows.some(row=>Date.parse(row.start)===Date.parse(item.begin) && Date.parse(row.end)===Date.parse(item.end))){skipped++;continue;}

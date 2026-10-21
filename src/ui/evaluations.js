@@ -22,8 +22,8 @@ var Controller = class Controller {
         this._chatPanel?.updateEvaluations(rows);
         // Update only the timestamp label; preserve cards, focus and scroll position.
         const now = Date.now();
-        for (const {actor, begin, prefix} of this._evaluationTimes?.values() || []) {
-            const text = `${prefix} ${this._evaluationRelativeTime(begin, now)}`;
+        for (const {actor, begin} of this._evaluationTimes?.values() || []) {
+            const text = this._evaluationRelativeTime(begin, now);
             if (actor.text !== text) actor.text = text;
         }
         this._syncOptionalSections();
@@ -96,8 +96,11 @@ var Controller = class Controller {
                 }
             }
             const prefix = `Starts · ${new Date(row.begin).toLocaleString('en-GB')}`;
-            const timeLabel = label(`${prefix} ${this._evaluationRelativeTime(row.begin, now)}`, 'pingoose-evaluation-time');
-            this._evaluationTimes.set(row.id, {actor:timeLabel, begin:row.begin, prefix});
+            const timeRow=new St.BoxLayout({style:'spacing: 6px;'});
+            timeRow.add_child(new St.Label({text:prefix,style_class:'pingoose-evaluation-time pingoose-agenda-emphasis'}));
+            const timeLabel=new St.Label({text:this._evaluationRelativeTime(row.begin,now),style_class:'pingoose-evaluation-time'});
+            timeRow.add_child(timeLabel);box.add_child(timeRow);
+            this._evaluationTimes.set(row.id, {actor:timeLabel, begin:row.begin});
             let actionRow = box;
             const paired = (row.missing && this._feedback[row.id]==='missing-confirm') || (Date.parse(row.begin) <= Date.now() && ['confirm', 'later'].includes(this._feedback[row.id]));
             const button = (text, action) => {

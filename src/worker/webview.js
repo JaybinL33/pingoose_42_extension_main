@@ -578,8 +578,52 @@ class Worker {
         }
     }
 
+    changeAgendaSubscription(id, action) {
+        const identity = this.auth;
+        const reply = error => emit({type: 'agenda-action', id, error});
+        if (!identity || this.signedOut) { reply('Log in to manage subscriptions.'); return; }
+        if (this.agendaMutation || this.agendaPending || now() < this.notBefore) {
+            reply('Agenda is refreshing. Please try again shortly.'); return;
+        }
+        this.agendaMutation = true;
+        const finish = error => {
+            this.agendaMutation = false;
+            if (stopped || this.auth !== identity) return;
+            reply(error);
+            this.nextAgendaPoll = 0;
+            this.pollAgenda();
+        };
+        const request = (method, url, callback) => {
+            const message = Soup.Message.new(method, url);
+            message.set_flags(Soup.MessageFlags.NO_REDIRECT);
+            message.request_headers.append('Authorization', identity.header);
+            message.request_headers.append('Accept', 'application/json');
+            message.request_headers.append('Content-Type', 'application/json');
+            this.session.queue_message(message, (_session, response) => {
+                if (stopped || this.auth !== identity) { this.agendaMutation = false; return; }
+                if ([429, 503].includes(response.status_code))
+                    this.notBefore = Math.max(this.notBefore, now() + Math.max(30, Model.retryAfter(response.response_headers.get_one('Retry-After'))));
+                callback(response);
+            });
+        };
+        // Refresh membership IDs and availability before any mutation; never trust the UI snapshot.
+        request('GET', 'https://intrapy.intra.42.fr/api/v1/users/me/events', response => {
+            let row;
+            try {
+                if (response.status_code !== 200 || response.response_body.length > 1000000) throw Error();
+                row = Model.parseAgenda(JSON.parse(response.response_body.data)).find(item => item.id === id);
+            } catch (_) { finish('Unable to refresh agenda. No change was sent.'); return; }
+            const operation = Model.agendaAction(row, action);
+            if (!operation) { finish('Subscription state or availability changed. Check the refreshed agenda.'); return; }
+            request(operation.method, operation.url, result => {
+                if (result.status_code >= 200 && result.status_code < 300) finish(null);
+                else finish('Subscription could not be confirmed. Check the refreshed agenda or open Intra.');
+            });
+        });
+    }
+
     pollAgenda() {
-        if (!this.auth || this.agendaPending || now() < (this.nextAgendaPoll || 0) || now() < this.notBefore) return;
+        if (!this.auth || this.agendaMutation || this.agendaPending || now() < (this.nextAgendaPoll || 0) || now() < this.notBefore) return;
         const identity = this.auth;
         this.agendaPending = true;
         this.nextAgendaPoll = now() + 30;
@@ -782,8 +826,23 @@ class Worker {
             if (time > 0xffffffff) return;
             return this.command(presentation[2], time);
         }
+        const subscription = /^agenda:(subscribe|unsubscribe):(\d+)$/.exec(command);
+        if (subscription) { this.changeAgendaSubscription(subscription[2], subscription[1]); return; }
         if(command==='agenda:refresh'){this.nextAgendaPoll=0;this.pollAgenda();return;}
         if(command==='refresh'){this.refreshData();return;}
+        if(command.startsWith('slots:create:')){
+            if(!this.auth || this.signedOut || this.clearingLogin){emit({type:'slots',error:'Log in to manage slots.'});return;}
+            let payload;
+            try{payload=JSON.parse(command.slice('slots:create:'.length));}
+            catch(_){emit({type:'slots',error:'Invalid slot schedule.'});return;}
+            this.slotsService ||= new imports.services.slotsService.SlotsService(this.context, allowedURI);
+            if(this.slotsService.busy){emit({type:'slots',error:'A slot request is already running.'});return;}
+            const identity=this.auth;
+            this.slotsService.run('create',null,result=>{
+                if(!stopped && this.auth===identity && !this.signedOut)emit({type:'slots',...result});
+            },payload);
+            return;
+        }
         if (command === 'slots:open-auto' || command === 'slots:open-5' || command === 'slots:open-30m') {
             if (!imports.models.featureFlags.enabled(this.featureSettings,'hidden-auto-slots')) { emit({type:'slots',error:'Automatic slot creation is disabled.'}); return; }
             if (!this.auth || this.signedOut) { emit({type: 'slots', error: 'Log in to manage slots.'}); return; }
