@@ -1,7 +1,7 @@
 .pingoose-count { margin-left: 5px; font-size: 0.85em; }
 .pingoose-heading { font-weight: 800; font-size: 1.12em; }
 .pingoose-list { width: 436px; max-width: 436px; max-height: 480px; }
-.pingoose-status { color: #b8b8b8; max-width: 360px; }
+
 .pingoose-card {
     width: 352px;
     padding: 12px;
@@ -26,9 +26,9 @@
 .pingoose-profile-level { color: #85d6cb; font-weight: bold; }
 .pingoose-progress-track { background-color: rgba(255,255,255,0.12); border-radius: 3px; }
 .pingoose-progress-fill { background-color: #85d6cb; border-radius: 3px; }
-.pingoose-profile-metrics { spacing: 24px; padding: 8px 0; }
+
 .pingoose-profile-caption { color: #9ca9b4; font-size: 0.85em; }
-.pingoose-profile-value { font-size: 1.4em; font-weight: bold; margin-top: 4px; }
+
 .pingoose-profile-deadline { font-weight: bold; }
 
 .pingoose-profile-stats { spacing: 6px; margin-top: 6px; }
@@ -45,7 +45,7 @@
 .pingoose-light .popup-menu-item { color: #20252c; }
 .pingoose-light .popup-menu-item:focus, .pingoose-light .popup-menu-item:hover { background-color: #dce7eb; }
 .pingoose-light .pingoose-profile-login, .pingoose-light .pingoose-profile-caption,
-.pingoose-light .pingoose-status, .pingoose-light .pingoose-card-time { color: #596673; }
+.pingoose-light .pingoose-card-time { color: #596673; }
 .pingoose-light .pingoose-profile-level, .pingoose-light .pingoose-profile-pace,
 .pingoose-light .pingoose-card-title { color: #16796b; }
 .pingoose-light .pingoose-card { background-color: #e7ecef; }
@@ -58,7 +58,7 @@
 .pingoose-list StScrollBar { min-width: 8px; }
 
 .pingoose-dark .popup-menu-content, .pingoose-light .popup-menu-content { width: 460px; min-width: 460px; max-width: 460px; padding-left: 0; padding-right: 0; }
-.pingoose-study-row { spacing: 24px; padding: 6px 0; }
+
 .pingoose-study-value { font-weight: bold; }
 
 .pingoose-overview { spacing: 16px; }
@@ -72,11 +72,9 @@
 .pingoose-dismiss { width: 26px; height: 26px; border-radius: 13px; padding: 0; font-size: 18px; background-color: rgba(127,127,127,0.2); }
 .pingoose-dismiss:hover { background-color: #b83b48; color: white; }
 .pingoose-card-row { spacing: 10px; }
-.pingoose-loading { padding: 28px 0; text-align: center; color: #85d6cb; }
-.pingoose-light .pingoose-loading { color: #16796b; }
 
 .pingoose-dark .pingoose-heading { color: #ffffff; }
-.pingoose-empty { padding-left: 0; }
+
 .pingoose-evaluation-scroll { width: 436px; max-height: 240px; }
 .pingoose-evaluation-card { width: 392px; padding: 14px 10px; spacing: 14px; border-radius: 10px; background-color: rgba(127,127,127,0.12); }
 .pingoose-evaluation-card StLabel { max-width: 392px; }
@@ -144,9 +142,6 @@
 /* Show a five-slot schedule plus controls; longer lists still scroll. */
 .pingoose-slot-scroll { max-height: 266px; }
 
-.pingoose-fixed-heading { padding: 6px 0; }
-
-.pingoose-chat-container { padding: 4px 24px 10px; }
 .pingoose-chat { width: 412px; spacing: 8px; }
 .pingoose-chat-header { spacing: 8px; }
 .pingoose-chat-status { padding: 3px 9px; border-radius: 10px; font-size: 0.78em; font-weight: bold; }
@@ -183,9 +178,6 @@
 .pingoose-chat-entry-error { border: 1px solid #ff6464; }
 .pingoose-chat-send { min-width: 16px; padding: 0 12px; border-radius: 10px; background-color: #2f7f74; color: white; font-weight: bold; }
 .pingoose-chat-send:hover, .pingoose-chat-send:focus { background-color: #3a9a8c; }
-.pingoose-person-seat-row { spacing: 8px; }
-.pingoose-chat-seat-button { padding: 1px 8px; border-radius: 8px; font-size: 0.8em; font-weight: bold; color: #85d6cb; background-color: rgba(133,214,203,0.14); }
-.pingoose-chat-seat-button:hover, .pingoose-chat-seat-button:focus { background-color: rgba(133,214,203,0.3); }
 
 .pingoose-light .pingoose-chat-scroll { background-color: #e7ecef; }
 .pingoose-light .pingoose-chat-bubble-in { background-color: #ffffff; }
@@ -193,7 +185,7 @@
 .pingoose-light .pingoose-chat-send:hover, .pingoose-light .pingoose-chat-send:focus { background-color: #1d9584; }
 .pingoose-light .pingoose-chat-time, .pingoose-light .pingoose-chat-system, .pingoose-light .pingoose-chat-empty { color: #596673; }
 .pingoose-light .pingoose-chat-bubble-out .pingoose-chat-time { color: rgba(255,255,255,0.8); }
-.pingoose-light .pingoose-chat-status-ok, .pingoose-light .pingoose-chat-seat-button { color: #16796b; background-color: rgba(22,121,107,0.12); }
+.pingoose-light .pingoose-chat-status-ok { color: #16796b; background-color: rgba(22,121,107,0.12); }
 .pingoose-light .pingoose-chat-status-err { color: #c92c36; }
 .pingoose-light .pingoose-chat-chip-active { background-color: rgba(22,121,107,0.2); }
 
@@ -208,11 +200,6 @@
 /* Non-overlay automatic scrollbar reserves its own row only on overflow. */
 .pingoose-chat-chip-scroll StScrollBar { min-height: 8px; margin-top: 4px; }
 
-.pingoose-blocked-scroll { max-height: 110px; }
-
-/* Bundled artwork is independent of the desktop icon theme. */
-.pingoose-panel-penguin { icon-size: 20px; }
-.pingoose-panel-brand { icon-size: 18px; padding: 2px; border-radius: 4px; background-color: #f5f7fa; }
 
 .pingoose-service-panel { width: 300px; spacing: 12px; }
 .pingoose-service-scroll { max-height: 440px; }
@@ -236,7 +223,7 @@
 
 .pingoose-todo-scroll { width: 236px; max-width: 236px; }
 .pingoose-todo-scroll StScrollBar { min-height: 8px; margin-top: 6px; }
-.pingoose-todo-rows { spacing: 8px; }
+
 .pingoose-todo-row { spacing: 8px; }
 .pingoose-todo-check { width: 24px; height: 26px; padding: 0; font-size: 20px; }
 
@@ -264,8 +251,6 @@
 
 .pingoose-agenda-card { padding: 20px 10px 10px; spacing: 18px; }
 .pingoose-agenda-scroll { max-height: 280px; }
-
-.pingoose-agenda-question { color: #ffffff; font-weight: bold; }
 
 .pingoose-agenda-detail { max-width: 400px; }
 
@@ -312,3 +297,6 @@
 .pingoose-counterpart-link { color: #ffffff; font-weight: bold; padding: 0; }
 .pingoose-light .pingoose-counterpart-link { color: #000000; }
 .pingoose-slot-matched { color: #ef5350; font-weight: bold; }
+
+.pingoose-chat-connect-error { color: #ff6464; font-size: 11px; }
+.pingoose-light .pingoose-chat-connect-error { color: #c92c36; }

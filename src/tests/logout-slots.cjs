@@ -4,6 +4,9 @@ class Actor{constructor(props={}){Object.assign(this,props);this.clutter_text={}
 class Modal{constructor(...args){this._init(...args);} _init(){this.contentLayout=new Actor();}setButtons(buttons){this.buttons=buttons;}connect(){}open(){return true;}destroy(){this.destroyed=true;} }
 class Native{_confirm(){loggedOut++;}_stopTimer(){}close(){}cancel(){cancelled++;}}
 const ctx={imports:{gi:{GLib:{get_monotonic_time:()=>clock,timeout_add_seconds:(_p,_s,cb)=>{const id=next++;timers.set(id,cb);return id;},source_remove:id=>timers.delete(id),SOURCE_REMOVE:false,SOURCE_CONTINUE:true},GObject:{registerClass:c=>c},St:{PolicyType:{NEVER:0,AUTOMATIC:1},ScrollView:Actor,BoxLayout:Actor,Icon:Actor,Label:Actor},Clutter:{KEY_Escape:27}},ui:{main:{notify(){notices++;}},modalDialog:{ModalDialog:Modal},endSessionDialog:{EndSessionDialog:Native}}}};
+const dialogContext={imports:ctx.imports};
+vm.createContext(dialogContext);vm.runInContext(fs.readFileSync('src/ui/logoutDialog.js','utf8'),dialogContext);
+ctx.imports.misc={extensionUtils:{getCurrentExtension:()=>({imports:{ui:{logoutDialog:dialogContext}}})}};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/services/systemSessionHook.js','utf8'),ctx);
 const future={start:new Date(Date.now()+60000).toISOString(),end:new Date(Date.now()+120000).toISOString()};let pending=[],commands=[];
 const hook=new ctx.SystemSessionHook((cmd,cb)=>{commands.push(cmd);pending.push(cb);},()=>true);hook.enable();
@@ -37,7 +40,12 @@ new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[reserved]});
 assert(reservedHook._dialog,'reserved-only schedule must warn');
 const walk=actor=>[actor,...(actor.children || []).flatMap(walk)];
 assert(walk(reservedHook._dialog.contentLayout).some(a=>a.text?.includes('Libft')));
-reservedHook._dialog.buttons[0].action();
+assert(!walk(reservedHook._dialog.contentLayout).some(a=>a.text?.includes('Open slots')));
+assert(!reservedHook._dialog.buttons.some(button=>button.label==='Close Slots & Log Out'));
+reservedHook._dialog.buttons.find(button=>button.label==='Cancel').action();
+new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[future,reserved]});
+assert(walk(reservedHook._dialog.contentLayout).some(a=>a.text==='Open slots · 1'));
+reservedHook._dialog.buttons.find(button=>button.label==='Close Slots & Log Out').action();
 pending.shift()({rows:[reserved]});
 assert.equal(reservedHook._dialog,null,'remaining reservation does not fail available-slot closure');
 reservedHook.disable();
@@ -51,5 +59,17 @@ assert(feedbackHook._dialog,'past unconfirmed evaluation alone must warn');
 const feedbackLabels=walk(feedbackHook._dialog.contentLayout).map(a=>a.text || '');
 assert(feedbackLabels.some(t=>t==='Feedback confirmation pending · 1'));
 assert(feedbackLabels.some(t=>t.includes('ft_printf') && t.includes('@peer') && t.includes('Evaluator')));
-feedbackHook._dialog.buttons[2].action();feedbackHook.disable();
+assert(!feedbackLabels.some(t=>/Open slots|Scheduled evaluations|Closing open slots/.test(t)));
+assert(!feedbackHook._dialog.buttons.some(button=>button.label==='Close Slots & Log Out'));
+feedbackHook._dialog.buttons.find(button=>button.label==='Cancel').action();feedbackHook.disable();
 console.log('PASS: pending past evaluation shown with project, role, counterpart and time; missing/test cards excluded');
+
+const emptyHook=new ctx.SystemSessionHook((cmd,cb)=>pending.push(cb),()=>true);
+emptyHook.enable();
+const beforeEmpty=loggedOut, beforeNotices=notices;
+new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[]});
+assert.equal(loggedOut,beforeEmpty+1);
+assert.equal(notices,beforeNotices);
+assert(!emptyHook._dialog);
+emptyHook.disable();
+console.log('PASS: zero-count sections and irrelevant close button omitted; no pending items means no warning');

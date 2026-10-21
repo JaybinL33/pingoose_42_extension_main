@@ -62,15 +62,15 @@ box=e._indicator.evaluations.items[0].children[0];assert.equal(box.children.leng
 console.log('PASS: actual user field, UTC timestamp, Evaluation Info and feedback branches; no early dismissal button');
 vm.runInContext('class VisibilityProbe {'+source.slice(source.indexOf('    _syncOptionalSections()'),source.indexOf('    _renderCards()'))+'}; globalThis.VisibilityProbe=VisibilityProbe;',context);
 const visibility=new context.VisibilityProbe();visibility._updatePanelLabel=()=>{};visibility._applySectionOrder=visibility._applyPanelLayout=()=>{};
-visibility._indicator=Object.fromEntries(['evaluationItem','evaluationSeparator','notificationItem','notificationSeparator','agendaItem','agendaSeparator'].map(key=>[key,{actor:{}}]));
+visibility._indicator=Object.fromEntries(['evaluationItem','notificationItem','agendaItem'].map(key=>[key,{actor:{}}]));
 visibility._evaluations=[];visibility._notifications=[];visibility._syncOptionalSections();
-assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
+assert.ok(Object.values(visibility._indicator).filter(item=>item.actor).every(item=>!item.actor.visible));
 visibility._evaluations=[{}];visibility._notifications=[{}];visibility._agenda=[{}];visibility._syncOptionalSections();
 assert.ok(Object.entries(visibility._indicator).filter(([key])=>!key.endsWith('Separator')).every(([,item])=>item.actor.visible));
-assert.equal(visibility._indicator.notificationSeparator.actor.visible,false);
-visibility._settingsVisible=true;visibility._syncOptionalSections();
-assert.ok(Object.values(visibility._indicator).every(item=>!item.actor.visible));
-console.log('PASS: empty sections and separators hidden; populated sections visible only on main page');
+visibility._indicator.loginOnly=true;visibility._syncOptionalSections();
+assert.ok(Object.values(visibility._indicator).filter(item=>item.actor).every(item=>!item.actor.visible));
+visibility._indicator.loginOnly=false;
+console.log('PASS: empty and signed-out sections hidden; populated sections visible');
 vm.runInContext('class PanelProbe {'+source.slice(source.indexOf('    _updatePanelLabel()'),source.indexOf('    _syncOptionalSections()'))+'};globalThis.PanelProbe=PanelProbe;',context);
 const panel=new context.PanelProbe();panel._indicator={loginOnly:false,profileReady:true,count:{}};
 panel._notifications=[{unread:true}];panel._updatePanelLabel();assert.equal(panel._indicator.count.text,'New 1');
@@ -106,23 +106,10 @@ console.log('PASS: feedback actions preserve scroll after layout; removing conte
 
 let evaluationStyle;
 visibility._indicator.evaluationScroll={set_style(style){evaluationStyle=style;}};
-visibility._settingsVisible=false;visibility._notifications=[{}];visibility._slotsExpanded=true;
+visibility._notifications=[{}];visibility._slotsExpanded=true;
 visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('190px'));
 visibility._slotsExpanded=false;visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('300px'));
 visibility._notifications=[];visibility._syncOptionalSections();assert.ok(evaluationStyle.includes('360px'));
-context.ModalDialog={ModalDialog:class {
- constructor(){this.contentLayout=new Actor();}
- setButtons(buttons){this.buttons=buttons;}
- open(){return true;}
- destroy(){this.destroyed=true;}
-}};
-vm.runInContext('class LogoutProbe {'+source.slice(source.indexOf('    _confirmIntraLogout()'),source.indexOf('    _clearProfile()'))+'};globalThis.LogoutProbe=LogoutProbe;',context);
-const logout=new context.LogoutProbe();let logoutCommands=0;
-logout._indicator={menu:{close(){}}};logout._send=()=>logoutCommands++;
-logout._confirmIntraLogout();assert.equal(logoutCommands,0);
-logout._logoutDialog.buttons[0].action();assert.equal(logoutCommands,0);assert.equal(logout._logoutDialog,null);
-logout._confirmIntraLogout();logout._logoutDialog.buttons[1].action();assert.equal(logoutCommands,1);
-console.log('PASS: adaptive evaluation height; Intra logout requires explicit confirmation and Cancel sends no command');
 e._evaluations=[{id:'missing-test',project:'Test',kind:'evaluated',begin:new Date(Date.now()+60000).toISOString(),users:[],missing:true}];
 e._feedback={};e.sent=null;e._renderEvaluations();
 box=e._indicator.evaluations.items[0].children[0];box.children.at(-1).clicked();

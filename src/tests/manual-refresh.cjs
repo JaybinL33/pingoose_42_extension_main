@@ -5,7 +5,7 @@ const context={now:()=>100,emit:()=>{}};vm.createContext(context);
 const Controller=vm.runInContext('(class {'+method+'})',context);
 function fixture(){
  const calls=[];const controller=new Controller();
- Object.assign(controller,{auth:{},view:{reload_bypass_cache:()=>calls.push('profile')},poll:()=>calls.push('evaluations'),pollAgenda:()=>calls.push('agenda'),refreshLogtime:()=>calls.push('logtime')});
+ Object.assign(controller,{auth:{},agenda:{nextPoll:0},view:{reload_bypass_cache:()=>calls.push('profile')},poll:()=>calls.push('evaluations'),pollAgenda:()=>calls.push('agenda'),refreshLogtime:()=>calls.push('logtime')});
  return {controller,calls};
 }
 let {controller,calls}=fixture();controller.refreshData();

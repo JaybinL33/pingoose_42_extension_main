@@ -1,8 +1,5 @@
-const {Clutter, Gio, GLib, GObject, Meta, Pango, St} = imports.gi;
+const {Gio, GLib, Meta, St} = imports.gi;
 const Main = imports.ui.main;
-const MessageTray = imports.ui.messageTray;
-const ModalDialog = imports.ui.modalDialog;
-const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const ByteArray = imports.byteArray;
@@ -78,6 +75,7 @@ class Pingoose {
         this._sessionHook.enable();
         this._startWorker();
         this._requestFullReset();
+        if (!this._resetting) this._updater = new Me.imports.services.updater.Updater(this._settings);
     }
 
     _startWorker() {
@@ -337,10 +335,10 @@ class Pingoose {
         if(this._receivedNotificationIds.size>2000)
             this._receivedNotificationIds.delete(this._receivedNotificationIds.values().next().value);
         this._unreadIds ||= new Set();
-        if (!this._indicator.menu.isOpen || this._settingsVisible) this._unreadIds.add(message.id);
+        if (!this._indicator.menu.isOpen) this._unreadIds.add(message.id);
         this._notifications.unshift({id: message.id, body: message.body,
             test: message.test === true, category: message.category,
-            unread: !this._indicator.menu.isOpen || this._settingsVisible, time: GLib.DateTime.new_now_local().format('%H:%M')});
+            unread: !this._indicator.menu.isOpen, time: GLib.DateTime.new_now_local().format('%H:%M')});
         this._saveCardState?.();
         this._renderCards();
         if (message.test || this._settings.get_boolean(message.category === 'agenda' ? 'notify-agenda' : 'notify-evaluations')) {
@@ -350,14 +348,14 @@ class Pingoose {
     }
 
     disable() {
+        this._updater?.destroy();
+        this._updater = null;
         this._projectPanel?.destroy();
         this._projectPanel = null;
         this._servicePanel?.destroy();
         this._servicePanel = null;
         this._chatPanel?.destroy();
         this._chatPanel = null;
-        this._logoutDialog?.destroy();
-        this._logoutDialog = null;
         if (this._evaluationScrollRestore) Meta.later_remove(this._evaluationScrollRestore);
         this._evaluationScrollRestore = 0;
         this._evaluationScrollPosition = null;

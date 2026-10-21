@@ -11,8 +11,6 @@ const Model = imports.models.evaluations;
 const {readProfileDOM, summarizeLogtime} = imports.worker.profile;
 const HOME = 'https://profile-v3.intra.42.fr/';
 const ENDPOINT = 'https://intrapy.intra.42.fr/api/v1/users/me/scale_teams';
-// Summary is also requested when the user hides the evaluations widget.
-const AUTH_REQUESTS = [ENDPOINT, 'https://intrapy.intra.42.fr/api/v1/users/me/summary'];
 const UID = new Gio.Credentials().get_unix_user();
 const now = () => GLib.get_monotonic_time() / 1000000;
 let worker = null;
@@ -71,6 +69,7 @@ class Worker {
         const source=Gio.SettingsSchemaSource.new_from_directory(`${SOURCE_ROOT}/schemas`,Gio.SettingsSchemaSource.get_default(),false);
         this.featureSettings=new Gio.Settings({settings_schema:source.lookup('org.gnome.shell.extensions.pingoose',true)});
         this.auth = null;
+        this.agenda = new imports.worker.agenda.AgendaClient(this, {emit, now, isStopped: () => stopped});
         this.loginWindow = false;
         this.nextProfileRead = 0;
         this.nextProfileReload = now() + 45;
@@ -474,11 +473,6 @@ class Worker {
         return true;
     }
 
-    counterpartReady(row,login) {
-        return /^c\d+r\d+s\d+$/i.test(row.seats?.[login] || '') &&
-            row.chatConfirmedAt?.[login]>=Date.parse(row.begin)-899000;
-    }
-
     // Allow one second for the server to publish the match at the 15-minute boundary.
     scheduleEvaluationPoll() {
         let delay=10000;
@@ -623,99 +617,11 @@ class Worker {
     }
 
     changeAgendaSubscription(id, action) {
-        const identity = this.auth;
-        const reply = error => emit({type: 'agenda-action', id, error});
-        if (!identity || this.signedOut) { reply('Log in to manage subscriptions.'); return; }
-        if (this.agendaMutation || this.agendaPending || now() < this.notBefore) {
-            reply('Agenda is refreshing. Please try again shortly.'); return;
-        }
-        this.agendaMutation = true;
-        const finish = error => {
-            this.agendaMutation = false;
-            if (stopped || this.auth !== identity) return;
-            reply(error);
-            this.nextAgendaPoll = 0;
-            this.pollAgenda();
-        };
-        const request = (method, url, callback) => {
-            const message = Soup.Message.new(method, url);
-            message.set_flags(Soup.MessageFlags.NO_REDIRECT);
-            message.request_headers.append('Authorization', identity.header);
-            message.request_headers.append('Accept', 'application/json');
-            message.request_headers.append('Content-Type', 'application/json');
-            this.session.queue_message(message, (_session, response) => {
-                if (stopped || this.auth !== identity) { this.agendaMutation = false; return; }
-                if ([429, 503].includes(response.status_code))
-                    this.notBefore = Math.max(this.notBefore, now() + Math.max(30, Model.retryAfter(response.response_headers.get_one('Retry-After'))));
-                callback(response);
-            });
-        };
-        // Refresh membership IDs and availability before any mutation; never trust the UI snapshot.
-        request('GET', 'https://intrapy.intra.42.fr/api/v1/users/me/events', response => {
-            let row;
-            try {
-                if (response.status_code !== 200 || response.response_body.length > 1000000) throw Error();
-                row = Model.parseAgenda(JSON.parse(response.response_body.data)).find(item => item.id === id);
-            } catch (_) { finish('Unable to refresh agenda. No change was sent.'); return; }
-            const operation = Model.agendaAction(row, action);
-            if (!operation) { finish('Subscription state or availability changed. Check the refreshed agenda.'); return; }
-            request(operation.method, operation.url, result => {
-                if (result.status_code >= 200 && result.status_code < 300) finish(null);
-                else finish('Subscription could not be confirmed. Check the refreshed agenda or open Intra.');
-            });
-        });
+        this.agenda.changeSubscription(id, action);
     }
 
     pollAgenda() {
-        if (!this.auth || this.agendaMutation || this.agendaPending || now() < (this.nextAgendaPoll || 0) || now() < this.notBefore) return;
-        const identity = this.auth;
-        this.agendaPending = true;
-        this.nextAgendaPoll = now() + 30;
-        const results = [];
-        let completed = 0;
-        const finish = (index, rows) => {
-            results[index] = rows;
-            if (++completed !== 2) return;
-            this.agendaPending = false;
-            if (stopped || this.auth !== identity) return;
-            if(results.some(value=>value===null)){this.refreshPart('agenda',false);return;}
-            try {
-                // Replace only after both snapshots succeed; errors must not erase the list.
-                const merged = new Map(results[0].map(row => [row.id, row]));
-                for (const row of results[1]) merged.set(row.id, row);
-                const rows = [...merged.values()].slice(0, 100);
-                const state = Model.advanceSeen(this.readState(), identity.subject, []).state;
-                const seen = new Set(state.agendaIds);
-                state.agendaIds = [...new Set([...state.agendaIds, ...rows.map(row => row.id)])].slice(-2000);
-                this.writeState(state);
-                if (this.evaluationState?.subject === state.subject) this.evaluationState.agendaIds = state.agendaIds;
-                emit({type: 'agenda', rows});
-                this.refreshPart('agenda');
-                for (const row of rows) if (!seen.has(row.id)) emit({type: 'notification', id: `agenda:${row.id}`,
-                    category: 'agenda', body: `New agenda event · ${row.name}\n${new Date(row.begin).toLocaleString('en-GB')}${row.location ? ` · ${row.location}` : ''}`});
-            } catch (_) { this.nextAgendaPoll = now() + 60; }
-        };
-        ['', '/unfeedbacked'].forEach((suffix, index) => {
-            const message = Soup.Message.new('GET', `https://intrapy.intra.42.fr/api/v1/users/me/events${suffix}`);
-            message.set_flags(Soup.MessageFlags.NO_REDIRECT);
-            message.request_headers.append('Authorization', identity.header);
-            message.request_headers.append('Accept', 'application/json');
-            this.session.queue_message(message, (_session, response) => {
-                let rows = null;
-                if (!stopped && this.auth === identity) {
-                    if (response.status_code === 429 || response.status_code === 503) {
-                        const delay = Math.max(30, Model.retryAfter(response.response_headers.get_one('Retry-After')));
-                        this.notBefore = Math.max(this.notBefore, now() + delay);
-                        this.nextAgendaPoll = Math.max(this.nextAgendaPoll, this.notBefore);
-                    }
-                    try {
-                        if (response.status_code === 200 && response.response_body.length <= 1000000)
-                            rows = Model.parseAgenda(JSON.parse(response.response_body.data), index === 1);
-                    } catch (_) { this.nextAgendaPoll = now() + 60; }
-                }
-                finish(index, rows);
-            });
-        });
+        this.agenda.poll();
     }
 
     poll() {
@@ -849,7 +755,7 @@ class Worker {
         this.refreshDeadline=now()+85;
         const due=Math.max(now(),this.notBefore || 0);
         this.nextPoll=due;
-        this.nextAgendaPoll=due;
+        this.agenda.nextPoll=due;
         this.nextLogtime=due;
         this.nextProfileReload=due;
         this.nextProfileRead=due+3;
@@ -873,7 +779,7 @@ class Worker {
         if(command.startsWith('chat:lookup:')){try{this.lookupChatSeat(JSON.parse(command.slice(12)));}catch(_){}return;}
         const subscription = /^agenda:(subscribe|unsubscribe):(\d+)$/.exec(command);
         if (subscription) { this.changeAgendaSubscription(subscription[2], subscription[1]); return; }
-        if(command==='agenda:refresh'){this.nextAgendaPoll=0;this.pollAgenda();return;}
+        if(command==='agenda:refresh'){this.agenda.nextPoll=0;this.pollAgenda();return;}
         if(command==='refresh'){this.refreshData();return;}
         if(command.startsWith('slots:create:')){
             if(!this.auth || this.signedOut || this.clearingLogin){emit({type:'slots',error:'Log in to manage slots.'});return;}

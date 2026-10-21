@@ -15,7 +15,7 @@ class Menu {
  destroy(){}
 }
 const ctx={imports:{gi:{Meta:{LaterType:{BEFORE_REDRAW:1},later_remove(){}},GLib:{SOURCE_REMOVE:false},Clutter:{RequestMode:{HEIGHT_FOR_WIDTH:0},ActorAlign:{END:1,CENTER:2,START:3}},Pango:{EllipsizeMode:{NONE:0},WrapMode:{WORD_CHAR:1}},St:{Side:{TOP:0},BoxLayout:Actor,Label:Actor,Button:Actor}},ui:{main:{uiGroup:{add_child(){}}},popupMenu:{PopupBaseMenuItem:Actor,PopupMenu:Menu}}}};
-ctx.imports.misc={extensionUtils:{getCurrentExtension:()=>({imports:{models:{evaluations:require('../models/evaluations.js')}}})}};
+ctx.imports.misc={extensionUtils:{getCurrentExtension:()=>({imports:{models:{agenda:require('../models/agenda.js')}}})}};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync('src/ui/agenda.js','utf8'),ctx);
 const p=new ctx.Controller(),section={items:[],removeAll(){this.items=[];},addMenuItem(item){this.items.push(item);}};
 p._indicator={agenda:section,menu:{connect(){return 1;},disconnect(){}}};p._optionsManager={addMenu(){},removeMenu(){}};p._syncOptionalSections=()=>{};p._send=command=>p.sent=command;
@@ -55,7 +55,7 @@ for(let i=0;i<3;i++){
 assert(!section.items.flatMap(all).some(actor=>actor.label==='Refresh'));
 console.log('PASS: options popup → Hide Agenda; persisted dismissal survives server refresh/restart; explicit reset restores cards; no footer Refresh');
 const detail={...row,kind:'exam',begin:new Date(Date.now()+86400000).toISOString(),end:new Date(Date.now()+90000000).toISOString(),description:'Details from Intra',subscribers:5,capacity:100,subscribed:false};
-p._agenda=[detail];p._agendaAll=[detail];p._agendaOptions=null;p._agendaConfirm=null;p._renderAgenda();
+p._agenda=[detail];p._agendaAll=[detail];p._renderAgenda();
 const detailsBox=section.items.flatMap(all).find(actor=>actor.style_class==='pingoose-agenda-details');
 assert.equal(detailsBox.visible,false);
 const originalCard=section.items[0];

@@ -76,7 +76,7 @@ var ChatPanel = class ChatPanel {
     openEvaluation(row,login) {
         const grant=this.canEvaluation(row,login);
         if(!grant || this._indicator.loginOnly)return;
-        const key=this._chat.open(grant.seat,grant.id);
+        const key=this._chat.open(grant.seat,grant.id,false,login);
         if(!key)return;
         this._chatUi.peerEntry.text=grant.seat;
         this._expanded=true;
@@ -87,10 +87,53 @@ var ChatPanel = class ChatPanel {
         if(!this._lookup || message.request!==this._lookup.request || message.login!==this._lookup.login)return;
         this._lookup=null;
         const ui=this._chatUi;
-        if(this._indicator.loginOnly || !Flags.enabled(this._settings,'hidden-cluster-chat'))return;
-        const key=Chat.SEAT.test(message.seat || '') ? this._chat.open(message.seat,'general',false,message.login) : null;
-        if(!key){ui.peerEntry.add_style_class_name('pingoose-chat-entry-error');return;}
-        ui.peerEntry.text='';ui.peerRow.hide();this._selectChat(key);
+        if(this._indicator.loginOnly || !Flags.enabled(this._settings,'hidden-cluster-chat')){this._setConnectBusy(false);return;}
+        if (!Chat.SEAT.test(message.seat || '')) {
+            this._connectionError('Could not find this user’s seat. Check the Intra ID and whether they are logged in to a cluster.');
+            return;
+        }
+        this._connectPeer(message.seat, message.login);
+    }
+    _setConnectBusy(busy) {
+        const ui = this._chatUi;
+        ui.connectSpinner.visible = busy;
+        ui.connectLabel.visible = !busy;
+        ui.connect.reactive = ui.connect.can_focus = !busy;
+        ui.add.reactive = !busy;
+        ui.peerEntry.clutter_text.editable = !busy;
+    }
+    _connectionReady(key) {
+        if (this._pendingConnection?.key !== key) return;
+        this._pendingConnection = null;
+        this._chat.showConnected(key);
+        this._selectChat(key);
+        this._setConnectBusy(false);
+        this._chatUi.peerEntry.text = '';
+        this._chatUi.peerFeedback.hide();
+        this._chatUi.peerRow.hide();
+    }
+    _connectionError(text) {
+        this._setConnectBusy(false);
+        const ui = this._chatUi;
+        ui.peerRow.show();
+        ui.peerEntry.add_style_class_name('pingoose-chat-entry-error');
+        ui.peerFeedback.text = text;
+        ui.peerFeedback.show();
+    }
+    _connectPeer(seat, login = null) {
+        if (this._chat.isBlocked(seat) || (login && this._blocked.includes('@' + login))) {
+            this._connectionError('Connection blocked by your blacklist.');
+            return;
+        }
+        const key = this._chat.open(seat, 'general', true, login);
+        if (!key) {
+            this._connectionError('Could not start a connection. Check your chat settings and connection limit.');
+            return;
+        }
+        this._pendingConnection = {key, input: this._chatUi.peerEntry.text};
+        this._chatUi.peerFeedback.hide();
+        this._setConnectBusy(true);
+        if (this._chat.isConnected(key)) this._connectionReady(key);
     }
     _updatePanelLabel() {
         const count = this._chat.unread;
@@ -101,6 +144,9 @@ var ChatPanel = class ChatPanel {
         this._chatBannerSource = null;
         this._expanded = false;
         this._lookup=null;
+        this._pendingConnection=null;
+        this._setConnectBusy(false);
+        this._chatUi.peerFeedback?.hide();
         this._grants=[];this._sessions=[];this._selectedEvaluation=null;
         this._chatUi.entry.text = '';
         this._chatUi.peerEntry.text = '';
@@ -108,10 +154,7 @@ var ChatPanel = class ChatPanel {
         this._chatUi.peerRow.hide();
         this._chat.destroy();
         this._chat = new Chat.ChatService(Chat.PORT, this._blocked);
-        this._chat.connect('availability-changed', () => this.onAvailabilityChanged?.());
-        this._chat.connect('server-state', () => this._renderChatStatus());
-        this._chat.connect('peer-changed', () => { this._renderChatChips(); this._updatePanelLabel(); });
-        this._chat.connect('message', (_chat, key, entry) => this._chatMessage(key, entry));
+        this._bindChatSignals();
         this._chatActive = null;
         this._renderChatStatus();
         this._renderChat();
@@ -201,32 +244,46 @@ var ChatPanel = class ChatPanel {
         ui.peerRow = new St.BoxLayout({visible: false, style_class: 'pingoose-chat-input-row'});
         ui.peerEntry = new St.Entry({hint_text: 'Seat number or Intra ID', can_focus: true,
             x_expand: true, style_class: 'pingoose-chat-entry'});
-        const connect = new St.Button({label: 'Connect', can_focus: true, style_class: 'pingoose-chat-send'});
+        const connect = ui.connect = new St.Button({can_focus: true, accessible_name: 'Connect', style_class: 'pingoose-chat-send'});
+        const connectContent = new St.BoxLayout({x_align: center, y_align: center});
+        ui.connectLabel = new St.Label({text: 'Connect'});
+        ui.connectSpinner = Me.imports.ui.spinner.create(16);
+        ui.connectSpinner.hide();
+        connectContent.add_child(ui.connectLabel);
+        connectContent.add_child(ui.connectSpinner);
+        connect.set_child(connectContent);
         ui.peerRow.add_child(ui.peerEntry);
         ui.peerRow.add_child(connect);
         root.add_child(ui.peerRow);
+        ui.peerFeedback = wrapLabel(new St.Label({visible: false, x_expand: true, style_class: 'pingoose-chat-connect-error'}));
+        root.add_child(ui.peerFeedback);
         const submitPeer = () => {
             if(!Flags.enabled(this._settings,'hidden-cluster-chat'))return;
-            const seat = ui.peerEntry.text.trim().toLowerCase();
+            if (this._lookup || this._pendingConnection) return;
+            this._pendingConnection = null;
+            ui.peerFeedback.hide();
+            ui.peerEntry.remove_style_class_name('pingoose-chat-entry-error');
+            const seat = ui.peerEntry.text.trim().toLowerCase().replace(/^@/, '');
             if(!Chat.SEAT.test(seat) && /^[a-z0-9_-]{1,64}$/.test(seat)){
                 const request=String(GLib.get_monotonic_time());
                 this._lookup={request,login:seat};
+                this._setConnectBusy(true);
                 this._send?.('chat:lookup:'+JSON.stringify(this._lookup));
                 return;
             }
-            const key = Chat.SEAT.test(seat) ? this._chat.open(seat) : null;
-            if (!key) {
-                ui.peerEntry.add_style_class_name('pingoose-chat-entry-error');
+            if (!Chat.SEAT.test(seat)) {
+                this._connectionError('Enter a valid seat number or Intra ID.');
                 return;
             }
-            ui.peerEntry.text = '';
-            ui.peerRow.hide();
-            this._selectChat(key);
+            this._connectPeer(seat);
         };
         ui.peerEntry.clutter_text.connect('activate', submitPeer);
-        ui.peerEntry.clutter_text.connect('text-changed', () => ui.peerEntry.remove_style_class_name('pingoose-chat-entry-error'));
+        ui.peerEntry.clutter_text.connect('text-changed', () => { ui.peerEntry.remove_style_class_name('pingoose-chat-entry-error'); ui.peerFeedback.hide(); });
         connect.connect('clicked', submitPeer);
         add.connect('clicked', () => {
+            if (this._lookup || this._pendingConnection) return;
+            ui.peerEntry.text = '';
+            ui.peerFeedback.hide();
             ui.peerRow.visible = !ui.peerRow.visible;
             if (ui.peerRow.visible) global.stage.set_key_focus(ui.peerEntry);
         });
@@ -259,10 +316,7 @@ var ChatPanel = class ChatPanel {
         };
         ui.entry.clutter_text.connect('activate', submit);
         ui.send.connect('clicked', submit);
-        this._chat.connect('availability-changed', () => this.onAvailabilityChanged?.());
-        this._chat.connect('server-state', () => this._renderChatStatus());
-        this._chat.connect('peer-changed', () => { this._renderChatChips(); this._updatePanelLabel(); });
-        this._chat.connect('message', (_chat, key, entry) => this._chatMessage(key, entry));
+        this._bindChatSignals();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
             this.sync();
             if (!open || !this._chat || !this._expanded) return;
@@ -271,6 +325,21 @@ var ChatPanel = class ChatPanel {
         });
         this._renderChatStatus();
         this._renderChat();
+    }
+
+    _bindChatSignals() {
+        this._chat.connect('availability-changed', () => this.onAvailabilityChanged?.());
+        this._chat.connect('connection-failed', (_chat, key, reason) => {
+            if (this._pendingConnection?.key !== key) return;
+            this._chatUi.peerEntry.text = this._pendingConnection.input;
+            this._pendingConnection = null;
+            if (this._chat.peer(key)?.background) this._chat.close(key);
+            this._connectionError(reason);
+        });
+        this._chat.connect('connection-ready', (_chat, key) => this._connectionReady(key));
+        this._chat.connect('server-state', () => this._renderChatStatus());
+        this._chat.connect('peer-changed', () => { this._renderChatChips(); this._updatePanelLabel(); });
+        this._chat.connect('message', (_chat, key, entry) => this._chatMessage(key, entry));
     }
 
     _renderChatStatus() {
@@ -370,6 +439,12 @@ var ChatPanel = class ChatPanel {
         ui.log.add_child(bubble);
     }
 
+    _isViewingChat(key) {
+        return this._indicator.menu.isOpen && !this._indicator.loginOnly &&
+            this._expanded && this._chatUi.root.visible && this._chatUi.root.mapped &&
+            this._chatActive === key;
+    }
+
     _chatMessage(key, entry) {
         if (!this._chatUi) return;
         if (!this._chatActive) {
@@ -380,7 +455,7 @@ var ChatPanel = class ChatPanel {
             this._appendChatEntry(entry);
         }
         if (entry.dir !== 'in') return;
-        if (this._indicator.menu.isOpen && this._expanded && !this._indicator.loginOnly && this._chatActive === key) {
+        if (this._isViewingChat(key)) {
             this._chat.markRead(key);
             return;
         }

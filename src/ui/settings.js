@@ -1,6 +1,5 @@
 const {Clutter, Gio, GLib, St} = imports.gi;
 const Main = imports.ui.main;
-const ModalDialog = imports.ui.modalDialog;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 
@@ -85,11 +84,11 @@ var Controller = class Controller {
         const showMain = () => {
             for (const item of mainItems) item.actor.visible = !indicator.loginOnly;
             welcome.actor.visible = indicator.loginOnly;
-            this._settingsVisible = false;
             this._syncOptionalSections();
         };
         const sync = () => this._applyTheme();
         this._themeChanged = this._settings.connect('changed', (_settings, key) => {
+            if (key === 'update-check-request') return;
             if (key === 'logout-request') {
                 if(!this._resetting){this._chatPanel?.reset();this._send('logout');}
                 return;
@@ -161,30 +160,6 @@ var Controller = class Controller {
         actor.remove_style_class_name('pingoose-dark');
         actor.remove_style_class_name('pingoose-light');
         actor.add_style_class_name(`pingoose-${this._settings.get_string('theme')}`);
-    }
-
-    _confirmIntraLogout() {
-        if (this._logoutDialog) return;
-        this._optionsMenu?.close();
-        this._indicator.menu.close();
-        const dialog = new ModalDialog.ModalDialog();
-        this._logoutDialog = dialog;
-        dialog.contentLayout.add_child(new St.Label({text: 'Log out of 42 Intra?',
-            style: 'font-weight: bold; font-size: 1.2em;'}));
-        dialog.contentLayout.add_child(new St.Label({text: 'You will need to log in again to view your Intra information.'}));
-        const finish = confirmed => {
-            this._logoutDialog = null;
-            dialog.destroy();
-            if (confirmed) {
-                this._chatPanel?.reset();
-                this._send('logout');
-            }
-        };
-        dialog.setButtons([
-            {label: 'Cancel', action: () => finish(false), key: Clutter.KEY_Escape, default: true},
-            {label: 'Log Out', action: () => finish(true)},
-        ]);
-        if (!dialog.open()) finish(false);
     }
 
 };

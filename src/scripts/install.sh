@@ -66,7 +66,7 @@ build=$(mktemp -d)
 trap 'rm -rf -- "$build"' EXIT
 (
     cd -- "$package_dir"
-    gnome-extensions pack --force --out-dir="$build" --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets --extra-source=dev .
+    gnome-extensions pack --force --out-dir="$build" --extra-source=config --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets --extra-source=dev .
 )
 # Install the locally built package directly; the GNOME CLI can fail copying
 # across the desktop's home/USB filesystem boundary after removing the old copy.
@@ -78,7 +78,7 @@ target = root / 'gnome-shell/extensions/pingoose@local'
 target.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(__import__('sys').argv[1]) as archive:
     # Remove only known legacy modules and development UI from older installs.
-    for name in ['webview.js','evaluations.js','slotsService.js','systemSessionHook.js','chat.js','chatPanel.js','token_refresher.py','42intra.png','pingoose.svg','devOptions.js']:
+    for name in ['webview.js','evaluations.js','slotsService.js','systemSessionHook.js','chat.js','chatPanel.js','token_refresher.py','42intra.png','pingoose.svg','assets/penguin.svg','devOptions.js']:
         (target / name).unlink(missing_ok=True)
     if 'dev/devOptions.js' not in archive.namelist():
         (target / 'dev/devOptions.js').unlink(missing_ok=True)

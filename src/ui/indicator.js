@@ -1,5 +1,4 @@
 const {Clutter, Gio, GLib, GObject, Pango, St} = imports.gi;
-const Main = imports.ui.main;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
@@ -184,8 +183,6 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         evaluationItem.add_child(evaluationArea);
         this.evaluationItem = evaluationItem;
         this.menu.addMenuItem(evaluationItem);
-        this.evaluationSeparator = new PopupMenu.PopupSeparatorMenuItem();
-        this.menu.addMenuItem(this.evaluationSeparator);
         this.agenda = new PopupMenu.PopupMenuSection();
         const agendaScroll = new St.ScrollView({style_class: 'pingoose-evaluation-scroll pingoose-agenda-scroll', can_focus: true, overlay_scrollbars: false});
         agendaScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -199,8 +196,6 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         agendaArea.add_child(this.agendaToggle);agendaArea.add_child(agendaScroll);
         this.agendaItem.add_child(agendaArea);
         this.menu.addMenuItem(this.agendaItem);
-        this.agendaSeparator = new PopupMenu.PopupSeparatorMenuItem();
-        this.menu.addMenuItem(this.agendaSeparator);
         this.cards = new PopupMenu.PopupMenuSection();
         const list = new St.ScrollView({style_class: 'pingoose-list', overlay_scrollbars: false, x_expand: true});
         list.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
@@ -215,8 +210,6 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         listItem.add_child(notificationArea);
         this.notificationItem = listItem;
         this.menu.addMenuItem(listItem);
-        this.notificationSeparator = new PopupMenu.PopupSeparatorMenuItem();
-        this.menu.addMenuItem(this.notificationSeparator);
         this.menu.connect('open-state-changed', (_menu, open) => {
             if (open) this.refreshLogtimeTitle();
             if (open && this.lastProfile) this.updateProfile(this.lastProfile);

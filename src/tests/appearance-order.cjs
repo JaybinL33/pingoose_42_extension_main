@@ -11,7 +11,7 @@ const box = {children: [], get_child_at_index(i){return this.children[i];},
     set_child_at_index(actor, index){this.children.splice(this.children.indexOf(actor),1);this.children.splice(index,0,actor);}};
 const actor = () => ({visible:true,get_parent:()=>box});
 const names = ['profileItem','profileSeparator','overviewItem','overviewSeparator','slotsButtonItem','slotsItem',
-    'evaluationItem','evaluationSeparator','agendaItem','agendaSeparator','notificationItem','notificationSeparator'];
+    'evaluationItem','agendaItem','notificationItem'];
 const indicator = {menu:{box}};
 for (const name of names) indicator[name]=actor();
 const toolbar=actor(),welcome=actor(),chat=actor(),services=actor();

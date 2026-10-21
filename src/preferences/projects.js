@@ -1,4 +1,4 @@
-const {Gtk,Gio,GLib}=imports.gi;
+const {Gtk,Gio}=imports.gi;
 const Common=imports.misc.extensionUtils.getCurrentExtension().imports.preferences.common;
 const Notes=imports.misc.extensionUtils.getCurrentExtension().imports.models.projectNotes;
 function build(settings){

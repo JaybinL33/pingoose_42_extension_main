@@ -1,6 +1,6 @@
 const {Clutter, GLib, Meta, Pango, St} = imports.gi;
 const PopupMenu = imports.ui.popupMenu;
-const Agenda = imports.misc.extensionUtils.getCurrentExtension().imports.models.evaluations;
+const Agenda = imports.misc.extensionUtils.getCurrentExtension().imports.models.agenda;
 
 var Controller = class Controller {
     _updateAgendaTimes() {
@@ -136,8 +136,6 @@ var Controller = class Controller {
     _restoreAgenda() {
         this._settings.set_strv('dismissed-agenda-ids',[]);
         this._dismissedAgendaIds = new Set();
-        this._agendaOptions = null;
-        this._agendaConfirm = null;
         this._agenda = [...(this._agendaAll || [])];
         this._renderAgenda();
     }

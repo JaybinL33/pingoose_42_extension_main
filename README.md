@@ -134,6 +134,8 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | 항목 | 기본값 / 동작 |
 | --- | --- |
 | Color mode | Dark. Dark / Light 선택 |
+| Check for Updates | 로그인 후에도 즉시 GitHub 업데이트 확인 |
+| Auto Update | 켜짐. 새 커밋 발견 시 자동 설치. 끄면 Yes/No로 확인 |
 | Auto-close side panels | 꺼짐. 켜면 메뉴를 닫을 때 프로젝트·서비스·채팅의 옆 패널도 닫음 |
 | Agenda Reset | 숨긴 아젠다 복원 및 현재 목록 재조회. 구독·피드백 상태는 변경하지 않음 |
 | Logout Intra | Intra 세션 종료 및 열린 관련 창·채팅 정리 |
@@ -182,6 +184,25 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | 사이트 목록 | SUBAK, PeerFinder |
 | 사이트 관리 | HTTPS 주소 추가·수정·삭제, 최대 30개, 기본 목록 복원 |
 
+## 업데이트
+
+PC 로그인 후 확장이 시작되면 해당 세션에서 한 번 GitHub의 `main` 브랜치를 확인합니다. 최초 확인에서는 현재 커밋을 기준으로 저장합니다. 이후 기준 커밋보다 앞선 커밋이 있으면 업데이트 대상으로 표시합니다. 확장을 껐다 켜거나 GNOME Shell을 재시작해도 같은 로그인 세션의 자동 확인은 반복하지 않습니다.
+
+**General → Check for Updates**는 세션 제한 없이 바로 확인합니다. **Auto Update는 기본 켜짐**이며, 끄면 시스템 알림의 Yes/No로 설치 여부를 선택합니다. No를 선택하거나 설치가 실패하면 기준 커밋을 바꾸지 않습니다.
+
+설치할 커밋을 확정한 뒤 `~/.local/state/pingoose/updates/checkout-*`에 클론하고 해당 커밋의 `./install.sh`를 실행합니다. 성공·실패 후 임시 클론을 정리합니다. 완료 알림이 나오면 GNOME Shell을 재시작하거나 다시 로그인해야 적용됩니다. 세션은 자동 재시작하지 않습니다. Git과 인터넷 연결이 필요합니다.
+
+기본 저장소는 `src/config/update.json`의 `https://github.com/ksmsky8385/pingoose`입니다. 설치 후에도 유지할 사용자 설정은 `~/.config/pingoose/update.json`에 아래 형식으로 둘 수 있습니다. 이 파일이 있으면 기본 설정보다 우선합니다.
+
+```json
+{
+  "repository": "https://github.com/ksmsky8385/pingoose",
+  "branch": "main"
+}
+```
+
+저장소나 브랜치를 바꾸면 다음 확인에서 새 기준 커밋을 저장합니다. GitHub 공개 저장소의 HTTPS 주소를 사용합니다. 기준 커밋과 세션 확인 기록은 `~/.local/state/pingoose/updates/state.json`에 저장하며, XDG 환경변수를 설정했다면 해당 경로를 따릅니다.
+
 ## 데이터 보관과 제거
 
 설정은 GSettings에, 사용자 데이터는 전용 XDG 디렉터리에 저장합니다.
@@ -200,28 +221,14 @@ XDG 환경변수를 지정했다면 해당 경로를 사용합니다. 일반 Int
 
 ## 개발 및 검증
 
-| 경로 | 역할 |
-| --- | --- |
-| `src/extension.js` | GNOME 진입점, 수명주기, worker 메시지 처리 |
-| `src/ui/` | 메인 메뉴, 카드, 슬롯, 옆 패널 |
-| `src/preferences/`, `src/prefs.js` | 설정 화면 |
-| `src/models/` | 데이터 정규화, 일정·설정·메모 모델 |
-| `src/services/` | 슬롯 API, 채팅 통신, 로그아웃 확인, 데이터 정리 |
-| `src/worker/` | GTK/WebKit 창, 인증, 조회 및 캐시 |
-| `src/schemas/` | GSettings 키·기본값·범위 |
-| `src/assets/`, `src/stylesheet.css` | 이미지와 스타일 |
-| `src/tests/` | 회귀 테스트 |
-| `src/scripts/` | 설치·패키징 |
-| `presentation/` | 발표 자료 |
-
-설정 기본값은 `src/schemas/org.gnome.shell.extensions.pingoose.gschema.xml`, 기본 서비스 목록은 `src/models/settingsDefaults.js`에서 관리합니다.
+코드의 진입점, 기능별 파일 위치와 검증 방법은 [코드 구조와 개발 안내](docs/ARCHITECTURE.md)를 참고하세요.
 
 프로젝트 루트에서 실행합니다.
 
 ```sh
-for test in src/tests/*.cjs; do node "$test" || exit 1; done
-gjs src/tests/chat-loopback.js
-src/scripts/package.sh /tmp/pingoose-release
+bash src/scripts/test.sh
+bash src/scripts/test.sh --sockets
+bash src/scripts/package.sh /tmp/pingoose-release
 ```
 
-Node 테스트는 로직과 모의 UI를, GJS loopback 테스트는 로컬 채팅 통신을 검사합니다. 실제 GNOME 화면 배치와 다른 좌석 PC 간 통신은 별도 확인이 필요합니다. 배포 패키지에는 실행 소스·에셋·스키마가 포함되며 테스트·발표 자료·개인 인증 데이터는 포함하지 않습니다.
+기본 검증은 JavaScript 문법, 회귀 테스트와 설정 스키마를 검사합니다. `--sockets`는 GJS 로컬 채팅 통신 테스트도 실행합니다. 실제 GNOME 화면 배치와 다른 좌석 PC 간 통신은 별도 확인이 필요합니다. 배포 패키지에는 실행 소스·에셋·스키마가 포함되며 테스트·개인 인증 데이터는 포함하지 않습니다.

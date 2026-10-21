@@ -9,6 +9,17 @@ function build(settings) {
     const autoClose=new Gtk.Switch({valign:Gtk.Align.CENTER});
     settings.bind('auto-close-panels',autoClose,'active',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Auto-close side panels',autoClose);
+    const checkUpdate = new Gtk.Button({label: 'Check for Updates'});
+    checkUpdate.connect('clicked', () => {
+        settings.set_string('update-check-request', GLib.uuid_string_random());
+        Gio.Settings.sync();
+    });
+    box.append(checkUpdate);
+    const autoUpdate = new Gtk.Switch({valign: Gtk.Align.CENTER});
+    settings.bind('auto-update', autoUpdate, 'active', Gio.SettingsBindFlags.DEFAULT);
+    Common.row(box, 'Auto Update', autoUpdate);
+    box.append(new Gtk.Label({label: 'Install new versions automatically after login. When off, ask before installing.',
+        xalign: 0, wrap: true}));
     box.append(new Gtk.Separator());
     const agendaReset=new Gtk.Button({label:'Agenda Reset'});
     agendaReset.connect('clicked',()=>Common.confirm(box,'Reset agenda cards?',

@@ -3,6 +3,8 @@ const Me = imports.misc.extensionUtils.getCurrentExtension();
 var Controller = class Controller {
     _requestFullReset() {
         if(this._resetting || !this._settings.get_string('reset-request'))return;
+        if(this._updater?.installing){this._settings.set_string('reset-status','error');return;}
+        this._updater?.destroy();this._updater=null;
         if(!this._process){this._settings.set_string('reset-status','error');return;}
         this._resetting=true;
         this._resetReady=false;

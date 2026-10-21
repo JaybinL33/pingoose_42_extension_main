@@ -22,6 +22,8 @@
     <key name="expand-evaluations" type="b"><default>true</default><summary>Expand evaluation info</summary></key>
     <key name="expand-agenda" type="b"><default>true</default><summary>Expand agenda</summary></key>
     <key name="expand-notifications" type="b"><default>true</default><summary>Expand notifications</summary></key>
+    <key name="update-check-request" type="s"><default>''</default><summary>Request an immediate update check</summary></key>
+    <key name="auto-update" type="b"><default>true</default><summary>Install available updates without prompting</summary></key>
     <key name="auto-close-panels" type="b"><default>false</default><summary>Close side panels when the main menu closes</summary></key>
     <key name="theme" type="s">
       <choices><choice value="dark"/><choice value="light"/></choices>
@@ -49,7 +51,6 @@
     <key name="show-agenda" type="b"><default>true</default><summary>Show agenda on the main page</summary></key>
     <key name="show-notifications" type="b"><default>true</default><summary>Show notifications on the main page</summary></key>
     <key name="blocked-chat-seats" type="as"><default>[]</default><summary>Blocked cluster chat seats</summary></key>
-    <key name="chat-enabled" type="b"><default>true</default><summary>Enable cluster chat sending and receiving</summary></key>
     <key name="show-chat" type="b"><default>true</default><summary>Show Cluster Chat button and panel</summary></key>
     <key name="show-slots" type="b"><default>true</default><summary>Show Evaluation Slots</summary></key>
     <key name="service-enabled" type="b"><default>true</default><summary>Enable 42 Services</summary></key>

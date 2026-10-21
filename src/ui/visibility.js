@@ -8,9 +8,9 @@ var Controller = class Controller {
             profile: [indicator.profileItem, indicator.profileSeparator],
             overview: [indicator.overviewItem, indicator.overviewSeparator],
             slots: [indicator.slotsButtonItem, indicator.slotsItem],
-            evaluations: [indicator.evaluationItem, indicator.evaluationSeparator],
-            agenda: [indicator.agendaItem, indicator.agendaSeparator],
-            notifications: [indicator.notificationItem, indicator.notificationSeparator],
+            evaluations: [indicator.evaluationItem],
+            agenda: [indicator.agendaItem],
+            notifications: [indicator.notificationItem],
             chat: [this._chatPanel?._chatUi?.item],
             services: [this._servicePanel?.item],
         };
@@ -61,7 +61,6 @@ var Controller = class Controller {
         this._projectPanel?.sync();
         this._updatePanelLabel();
         const indicator = this._indicator;
-        if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly;
         const enabled = key => this._settings ? this._settings.get_boolean(`show-${key}`) : true;
         if (indicator.slotsButtonItem) indicator.slotsButtonItem.visible = !indicator.loginOnly && enabled('slots');
         if (indicator.slotsItem) indicator.slotsItem.visible = !!this._slotsExpanded && !indicator.loginOnly && enabled('slots');
@@ -75,21 +74,17 @@ var Controller = class Controller {
         indicator.evaluationToggle?.updateCount(this._evaluations?.length || 0);
         indicator.agendaToggle?.updateCount(this._agenda?.length || 0);
         indicator.notificationToggle?.updateCount(this._notifications?.length || 0);
-        const evaluationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._evaluations?.length && enabled('evaluations');
-        const notificationsVisible = !indicator.loginOnly && !this._settingsVisible && !!this._notifications?.length && enabled('notifications');
-        const agendaVisible = !indicator.loginOnly && !this._settingsVisible && !!this._agenda?.length && enabled('agenda');
+        const evaluationsVisible = !indicator.loginOnly && !!this._evaluations?.length && enabled('evaluations');
+        const notificationsVisible = !indicator.loginOnly && !!this._notifications?.length && enabled('notifications');
+        const agendaVisible = !indicator.loginOnly && !!this._agenda?.length && enabled('agenda');
         indicator.agendaItem.actor.visible = agendaVisible;
-        indicator.agendaSeparator.actor.visible = false;
         indicator.evaluationItem.actor.visible = evaluationsVisible;
-        indicator.evaluationSeparator.actor.visible = false;
         indicator.notificationItem.actor.visible = notificationsVisible;
         // Caps, not fixed heights: short lists occupy only their natural height.
         // Preserve more room for notifications when the slot list is expanded.
         const slotsVisible = !!this._slotsExpanded && !indicator.loginOnly && enabled('slots');
         const evaluationMax = notificationsVisible ? (slotsVisible ? 190 : 300) : (slotsVisible ? 280 : 360);
         indicator.evaluationScroll?.set_style(`min-height: 0; max-height: ${evaluationMax}px;`);
-        indicator.notificationSeparator.actor.visible = false;
-        if (indicator.overviewSeparator) indicator.overviewSeparator.actor.visible = evaluationsVisible || agendaVisible || notificationsVisible;
         this._applySectionOrder();
         this._applyPanelLayout();
     }

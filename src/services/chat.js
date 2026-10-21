@@ -83,7 +83,7 @@ var ChatService = class ChatService {
             const existing=this.peer(grant.seat);
             if(existing && existing.scope!==grant.id)continue;
             this._evaluationChats.delete(key);
-            const seat=this.open(grant.seat,grant.id);
+            const seat=this.open(grant.seat,grant.id,false,grant.login);
             const peer=seat && this.peer(seat);
             if(peer){peer.history=[...saved.history,...peer.history].slice(-MAX_HISTORY);peer.unread=saved.unread;peer.connectionAnnounced=saved.connectionAnnounced;this.emit('peer-changed',seat);}
         }
@@ -100,6 +100,7 @@ var ChatService = class ChatService {
     }
     _ready(peer, conn) {
         if (!this._authorized(peer, conn)) return;
+        this.emit('connection-ready', peer.key);
         const grant = this.policy.grants.find(item => item.id === peer.scope && item.seat === peer.key && item.login === this._handshakes.get(conn).hello.login);
         if (!grant) return;
         const key = this._grantKey(grant);
@@ -186,6 +187,19 @@ var ChatService = class ChatService {
         let total = 0;
         for (const peer of this._peers.values()) total += peer.unread;
         return total;
+    }
+
+    showConnected(key) {
+        const peer = this.peer(key);
+        if (!peer || !this.isConnected(key)) return;
+        peer.background = false;
+        this._announceConnection(peer, `Connected to ${peer.host}`);
+        this.emit('peer-changed', key);
+    }
+
+    isConnected(key) {
+        const peer = this.peer(key);
+        return !!peer?.connections.some(conn => this._authorized(peer, conn));
     }
 
     peer(key) {
@@ -328,6 +342,7 @@ var ChatService = class ChatService {
                 return;
             }
             if (!conn) {
+                this.emit('connection-failed', peer.key, 'Could not connect. The seat may be offline or Cluster Chat may be unavailable.');
                 const lost = peer.queue.length;
                 peer.queue = [];
                 this._record(peer, 'sys', `Connection failed: ${error?.message ?? 'unknown'}${lost ? ` (${lost} messages not sent)` : ''}`);
@@ -497,6 +512,7 @@ var ChatService = class ChatService {
             const unsent=peer.queue.length;
             peer.queue=[];
             peer.writing=false;
+            if (!authorized) this.emit('connection-failed', peer.key, 'Connection rejected or timed out. Check that both users have Cluster Chat enabled and are not blocked.');
             if (!authorized) this._record(peer, 'sys',
                 'Connection unavailable or chat is disabled on the other seat.');
             if(unsent)this._record(peer,'sys',`${unsent} message(s) were not sent. Automatic retry stopped.`);

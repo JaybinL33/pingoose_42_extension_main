@@ -3,7 +3,7 @@ const source=fs.readFileSync('src/worker/webview.js','utf8');
 let time=10000000,delay;
 const ctx={Date:{now:()=>time,parse:Date.parse},now:()=>time/1000,GLib:{source_remove(){},timeout_add:(_p,ms)=>{delay=ms;return 1;}}};
 vm.createContext(ctx);
-const Probe=vm.runInContext('(class {'+source.slice(source.indexOf('    counterpartReady('),source.indexOf('    publishEvaluations()'))+'})',ctx);
+const Probe=vm.runInContext('(class {'+source.slice(source.indexOf('    scheduleEvaluationPoll('),source.indexOf('    publishEvaluations()'))+'})',ctx);
 const p=new Probe();p.notBefore=0;
 const row={id:'1',begin:new Date(time+899250).toISOString(),users:[]};p.evaluationState={evaluations:[row]};
 p.scheduleEvaluationPoll();assert.equal(delay,250,'request one second after the 15 minute boundary, not next 10 second poll');
