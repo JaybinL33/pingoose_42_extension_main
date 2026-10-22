@@ -18,7 +18,7 @@ class Updates(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.path = Path(self.directory.name) / 'state.json'
-        self.state = {}
+        self.state = {'source': CONFIG, 'installed': {'sha': A}, 'baseline': {'sha': A}}
         self.sha = A
         self.comparison = 'ahead'
         self.requests = []
@@ -33,7 +33,7 @@ class Updates(unittest.TestCase):
         return updater.check(CONFIG, self.state, self.path, login, self.api)
 
     def available(self):
-        self.assertEqual(self.check('session1')['status'], 'baseline')
+        self.assertEqual(self.check('session1')['status'], 'current')
         self.sha = B
         self.assertEqual(self.check('session2')['status'], 'available')
 
@@ -51,10 +51,10 @@ class Updates(unittest.TestCase):
         result = updater.check(CONFIG, self.state, self.path, 'session1', self.api, force=True)
         self.assertEqual(result['status'], 'available')
 
-    def test_rewind_or_divergence_is_not_a_newer_commit(self):
+    def test_rewind_or_identical_is_not_a_newer_commit(self):
         self.check('session1')
         self.sha = B
-        for index, status in enumerate(['behind', 'diverged', 'identical']):
+        for index, status in enumerate(['behind', 'identical']):
             self.comparison = status
             self.assertEqual(self.check(str(index))['status'], 'current')
 
@@ -97,11 +97,36 @@ class Updates(unittest.TestCase):
             with self.assertRaises(updater.UpdateError):
                 updater.install(config, self.state, self.path, sha, lambda *_: self.fail('must not execute'))
 
-    def test_repository_change_starts_a_new_baseline(self):
+    def test_repository_change_offers_configured_branch(self):
         self.available()
         result = updater.check({**CONFIG, 'branch': 'next'}, self.state, self.path, 'session3', self.api)
-        self.assertEqual(result['status'], 'baseline')
-        self.assertIsNone(self.state['candidate'])
+        self.assertEqual(result['status'], 'available')
+        self.assertEqual(self.state['candidate']['sha'], B)
+
+    def test_legacy_remote_baseline_does_not_hide_update(self):
+        self.state = {'source': CONFIG, 'baseline': {'sha': B}}
+        self.sha = B
+        self.assertEqual(self.check('session1')['status'], 'available')
+
+    def test_install_receipt_overrides_stale_state(self):
+        self.sha = B
+        result = updater.check(CONFIG, self.state, self.path, 'session1', self.api,
+                               installed={'source': CONFIG, 'sha': B})
+        self.assertEqual(result['status'], 'current')
+        self.assertEqual(self.requests, ['commits/main'])
+
+    def test_first_check_compares_actual_install(self):
+        self.state = {}
+        self.sha = B
+        result = updater.check(CONFIG, self.state, self.path, 'session1', self.api,
+                               installed={'source': CONFIG, 'sha': A})
+        self.assertEqual(result['status'], 'available')
+        self.assertIn(f'compare/{A}...{B}', self.requests)
+
+    def test_diverged_branch_offers_update(self):
+        self.sha = B
+        self.comparison = 'diverged'
+        self.assertEqual(self.check('session1')['status'], 'available')
 
     def test_real_local_clone_installs_pinned_revision(self):
         repo = self.path.parent / 'fixture-repository'

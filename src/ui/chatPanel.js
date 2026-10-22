@@ -1,5 +1,5 @@
 // Chat UI adapted from origin/deeeev-gangjeon; displayed beside the main menu.
-const {Clutter, GLib, Pango, St} = imports.gi;
+const {Clutter, Gio, GLib, Pango, St} = imports.gi;
 const Main = imports.ui.main;
 const MessageTray = imports.ui.messageTray;
 const PopupMenu = imports.ui.popupMenu;
@@ -306,7 +306,12 @@ var ChatPanel = class ChatPanel {
         ui.entry = new St.Entry({can_focus: true, x_expand: true, style_class: 'pingoose-chat-entry'});
         ui.entry.clutter_text.max_length = 1000;
         ui.send = new St.Button({can_focus: true, accessible_name: 'Send', style_class: 'pingoose-chat-send'});
-        ui.send.set_child(new St.Label({text: '▶'}));
+        ui.send.set_child(new St.Icon({
+            gicon: new Gio.FileIcon({file: Gio.File.new_for_path(Me.path + '/assets/send-symbolic.svg')}),
+            icon_size: 16,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        }));
         inputRow.add_child(ui.entry);
         inputRow.add_child(ui.send);
         root.add_child(inputRow);

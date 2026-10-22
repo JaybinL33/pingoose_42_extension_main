@@ -95,7 +95,7 @@ def github(config, route):
         raise UpdateError('Could not contact GitHub. The next login will try again.') from error
 
 
-def check(config, state, path, login, api=github, force=False):
+def check(config, state, path, login, api=github, force=False, installed=None):
     if not force and state.get('session') == login:
         return {'status': 'skipped'}
     state['session'] = login
@@ -107,15 +107,23 @@ def check(config, state, path, login, api=github, force=False):
         raise UpdateError('GitHub returned an invalid commit.')
     commit = {'sha': sha, 'date': latest.get('commit', {}).get('committer', {}).get('date', ''),
               'message': latest.get('commit', {}).get('message', '').split('\n')[0][:180]}
-    if state.get('source') != config or not state.get('baseline'):
-        state.update(source=config, baseline=commit, candidate=None)
-        save_json(path, state)
-        return {'status': 'baseline', 'commit': commit}
-    baseline = state['baseline']['sha']
+    # A previously observed remote HEAD is not proof of an installed version.
+    # Prefer the receipt shipped with the installation, including manual installs.
+    if installed and installed.get('source') == config and re.fullmatch('[0-9a-f]{40}', installed.get('sha', '')):
+        baseline = installed['sha']
+    elif state.get('source') == config and state.get('installed'):
+        baseline = state['installed']['sha']
+    else:
+        baseline = None
+    if state.get('source') != config:
+        state.pop('installed', None)
+    state['source'] = dict(config)
     state['candidate'] = None
-    if sha != baseline:
+    if baseline is None:
+        state['candidate'] = commit
+    elif sha != baseline:
         comparison = api(config, f'compare/{baseline}...{sha}')
-        if comparison.get('status') == 'ahead':
+        if comparison.get('status') in ('ahead', 'diverged'):
             state['candidate'] = commit
     save_json(path, state)
     if state['candidate']:
@@ -152,7 +160,7 @@ def install(config, state, path, approved, run=run_command):
         if not (checkout / 'install.sh').is_file():
             raise UpdateError('This repository has no install.sh.')
         run(['bash', './install.sh'], cwd=str(checkout), timeout=300)
-        state.update(baseline=candidate, candidate=None)
+        state.update(baseline=candidate, installed=candidate, candidate=None)
         save_json(path, state)
         return {'status': 'installed', 'commit': candidate}
     finally:
@@ -178,7 +186,8 @@ def main():
         config = configuration(root)
         state = load_json(path, {})
         if args.action == 'check':
-            return check(config, state, path, session_key(), force=args.force)
+            return check(config, state, path, session_key(), force=args.force,
+                         installed=load_json(root / 'config/installed.json'))
         return install(config, state, path, args.commit)
 
 

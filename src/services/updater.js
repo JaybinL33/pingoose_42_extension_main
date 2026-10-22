@@ -26,8 +26,6 @@ var Updater = class Updater {
         this._run('check', null, result => {
             if (result.status === 'available') this._offer(result);
             else if (result.status === 'error') this._notify('Update check failed', result.error);
-            else if (manual && result.status === 'baseline') this._notify('Update baseline saved',
-                'The current GitHub commit was saved. Future checks will compare against it.');
             else if (manual && result.status === 'current') this._notify('Pingoose is up to date',
                 'No newer commit was found on the configured branch.');
             else if (manual && result.status === 'busy') this._notify('Pingoose Update', 'Another update check or installation is already running.');

@@ -68,6 +68,21 @@ trap 'rm -rf -- "$build"' EXIT
     cd -- "$package_dir"
     gnome-extensions pack --force --out-dir="$build" --extra-source=config --extra-source=ui --extra-source=services --extra-source=worker --extra-source=models --extra-source=preferences --extra-source=assets --extra-source=dev .
 )
+# Include the actual source revision without modifying the working tree.
+/usr/bin/python3 - "$package_dir" "$build/pingoose@local.shell-extension.zip" <<'PYRECEIPT'
+import importlib.util, json, subprocess, sys, zipfile
+from pathlib import Path
+root = Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location('updater', root / 'worker/updater.py')
+updater = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(updater)
+receipt = None
+if (root.parent / '.git').exists():
+    sha = subprocess.check_output(['git', '-C', str(root.parent), 'rev-parse', 'HEAD'], text=True).strip()
+    receipt = {'source': updater.configuration(root), 'sha': sha}
+with zipfile.ZipFile(sys.argv[2], 'a') as archive:
+    archive.writestr('config/installed.json', json.dumps(receipt))
+PYRECEIPT
 # Install the locally built package directly; the GNOME CLI can fail copying
 # across the desktop's home/USB filesystem boundary after removing the old copy.
 /usr/bin/python3 - "$build/pingoose@local.shell-extension.zip" <<'PYINSTALL'
