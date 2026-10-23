@@ -175,6 +175,7 @@
 .pingoose-chat-empty { padding: 56px 16px; color: #9ca9b4; text-align: center; }
 .pingoose-chat-input-row { spacing: 6px; }
 .pingoose-chat-entry { padding: 7px 10px; border-radius: 10px; }
+.pingoose-chat-input-row .pingoose-chat-entry { selection-background-color: #2f7f74; selected-color: #ffffff; }
 .pingoose-chat-entry-error { border: 1px solid #ff6464; }
 .pingoose-chat-send { min-width: 16px; padding: 0 12px; border-radius: 10px; background-color: #2f7f74; color: white; font-weight: bold; }
 .pingoose-chat-send:hover, .pingoose-chat-send:focus { background-color: #3a9a8c; }

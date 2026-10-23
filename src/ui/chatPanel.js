@@ -305,6 +305,14 @@ var ChatPanel = class ChatPanel {
         const inputRow = new St.BoxLayout({style_class: 'pingoose-chat-input-row'});
         ui.entry = new St.Entry({can_focus: true, x_expand: true, style_class: 'pingoose-chat-entry'});
         ui.entry.clutter_text.max_length = 1000;
+        ui.entry.clutter_text.set_selectable(true);
+        // Let drags starting in the entry's padding use Clutter.Text's native
+        // selection and pointer grab, just like drags starting on a glyph.
+        ui.entry.connect('button-press-event', (_actor, event) => {
+            if (!ui.entry.reactive || event.get_button() !== 1)
+                return Clutter.EVENT_PROPAGATE;
+            return ui.entry.clutter_text.event(event, false);
+        });
         ui.send = new St.Button({can_focus: true, accessible_name: 'Send', style_class: 'pingoose-chat-send'});
         ui.send.set_child(new St.Icon({
             gicon: new Gio.FileIcon({file: Gio.File.new_for_path(Me.path + '/assets/send-symbolic.svg')}),
