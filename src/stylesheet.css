@@ -194,7 +194,7 @@
 .pingoose-chat-panel { width: 360px; padding: 16px; border-radius: 14px; }
 .pingoose-dark .pingoose-chat-panel { background-color: #23272d; color: #edf0f4; }
 .pingoose-light .pingoose-chat-panel { background-color: #f6f7f9; color: #20252c; }
-.pingoose-chat-panel .pingoose-chat-chip-scroll { width: 326px; max-width: 326px; }
+.pingoose-chat-panel .pingoose-chat-chip-scroll { width: 292px; max-width: 292px; }
 .pingoose-chat-panel .pingoose-chat-scroll { height: 300px; }
 .pingoose-chat-panel .pingoose-chat-system { max-width: 320px; }
 
@@ -301,3 +301,29 @@
 
 .pingoose-chat-connect-error { color: #ff6464; font-size: 11px; }
 .pingoose-light .pingoose-chat-connect-error { color: #c92c36; }
+
+.pingoose-favorites-scroll { min-height: 0; margin-top: 4px; }
+.pingoose-favorites-list { spacing: 8px; }
+.pingoose-favorite-card { padding: 7px; border-radius: 10px; background-color: rgba(127,127,127,0.10); spacing: 8px; }
+.pingoose-favorite-unavailable { color: #e5c66d; font-weight: bold; }
+.pingoose-light .pingoose-favorite-unavailable { color: #916b00; }
+.pingoose-chat-add.pingoose-toggle-active { background-color: rgba(133,214,203,0.25); }
+
+.pingoose-favorite-action { min-width: 44px; padding: 4px 7px; font-size: 0.9em; border-radius: 8px; font-weight: bold; background-color: rgba(127,127,127,0.16); }
+.pingoose-favorite-action:hover, .pingoose-favorite-action:focus { background-color: rgba(127,127,127,0.3); }
+
+.pingoose-favorite-avatar { margin: 2px; border-radius: 10px; }
+.pingoose-favorite-names { spacing: 5px; }
+.pingoose-favorite-name-row { spacing: 8px; }
+.pingoose-favorite-status-row { spacing: 8px; }
+
+.pingoose-favorites-panel { spacing: 6px; }
+.pingoose-favorite-card .pingoose-identity { spacing: 8px; }
+.pingoose-favorite-card .pingoose-profile-name { font-size: 1.08em; }
+.pingoose-favorite-status-row { font-size: 0.9em; }
+.pingoose-favorite-action.pingoose-toggle-active { background-color: rgba(133,214,203,0.25); }
+.pingoose-favorite-action.pingoose-toggle-active:hover { background-color: rgba(133,214,203,0.36); }
+.pingoose-light .pingoose-favorite-action.pingoose-toggle-active { background-color: rgba(22,121,107,0.20); }
+
+.pingoose-favorite-status-row .pingoose-profile-level,
+.pingoose-favorite-status-row .pingoose-favorite-unavailable { font-size: 0.95em; }

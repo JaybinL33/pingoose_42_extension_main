@@ -24,6 +24,7 @@ class Pingoose {
         this._bannerDuration = new Me.imports.services.bannerDuration.Controller(this._settings);
         this._notificationSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
         this._indicator = new Indicator();
+        this._autoHideScrollbars = new Me.imports.ui.autoHideScrollbars.Controller(this._indicator.menu.actor, this._settings);
         this._indicator.onLogin = () => this._send('login');
         this._indicator.onProjectOpen = project => {
             if (this._settings.get_boolean('project-open-direct')) this._visitProject(project);
@@ -349,6 +350,8 @@ class Pingoose {
     }
 
     disable() {
+        this._autoHideScrollbars?.destroy();
+        this._autoHideScrollbars = null;
         this._bannerDuration?.destroy();
         this._bannerDuration = null;
         this._updater?.destroy();

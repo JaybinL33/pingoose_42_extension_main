@@ -31,7 +31,8 @@ function readProfileDOM(login) {
                 deadline = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         }
     }
-    const avatar = Array.from(document.images).find(img => /^https:\/\/cdn\.intra\.42\.fr\/users\//.test(img.src));
+    const avatars = Array.from(document.images).filter(img => /^https:\/\/cdn\.intra\.42\.fr\/users\//.test(img.src));
+    const avatar = avatars.find(img => img.src.match(/\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i)?.[1] === login) || avatars[0];
     const projects = [];
     const seen = new Set();
     for (const link of document.querySelectorAll('a[href]')) {

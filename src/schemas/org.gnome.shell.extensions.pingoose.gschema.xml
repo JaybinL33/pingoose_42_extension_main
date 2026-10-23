@@ -30,6 +30,8 @@
       <default>'dark'</default>
       <summary>Profile menu color theme</summary>
     </key>
+    <key name="auto-hide-scrollbars" type="b"><default>true</default><summary>Hide panel scrollbars when scrolling stops</summary></key>
+    <key name="chat-favorites" type="s"><default>'[]'</default><summary>Saved Cluster Chat favorite profiles</summary></key>
     <key name="notification-duration" type="i">
       <range min="0" max="120"/>
       <default>4</default>

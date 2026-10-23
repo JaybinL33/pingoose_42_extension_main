@@ -345,16 +345,63 @@ class Worker {
     lookupChatSeat(request){
         if(!this.auth || this.signedOut || !imports.models.featureFlags.enabled(this.featureSettings,'hidden-cluster-chat') ||
             !/^[a-z0-9_-]{1,64}$/.test(request.login || '') || !/^\d{1,24}$/.test(request.request || ''))return;
-        if(this.chatLookup){emit({type:'chat-lookup',...request,error:'Lookup already running.'});return;}
+        if(this.chatLookup){
+            if(!request.favorite && !this.queuedChatLookup)this.queuedChatLookup=request;
+            else emit({type:'chat-lookup',...request,error:'Lookup already running. Please try again.'});
+            return;
+        }
         const identity=this.auth;
         const view=new WebKit2.WebView({web_context:this.context});
         this.chatLookup=view;
-        let attempts=0,reading=false;
+        if(request.stateOnly)view.get_settings().set_auto_load_images(false);
+        let attempts=0,reading=false,profile=null,avatar=null,finished=false,avatarURL=null,avatarReading=false,availabilityKnown=false;
+        const images=new Map();
+        const readAvatar=()=>{
+            const resource=images.get(avatarURL);
+            if(!resource || avatar || avatarReading || finished)return;
+            const response=resource.get_response();
+            if(response?.get_status_code()!==200 || !/^image\//.test(response.get_mime_type() || ''))return;
+            avatarReading=true;
+            resource.get_data(this.cancel,(item,result)=>{
+                avatarReading=false;
+                try{
+                    const bytes=item.get_data_finish(result);
+                    if(!finished && bytes?.length && bytes.length<=2000000)avatar=GLib.base64_encode(bytes);
+                }catch(_){}
+            });
+        };
         const finish=seat=>{
+            if(finished)return;
+            finished=true;
             view.stop_loading();view.destroy();this.chatLookup=null;
             if(!stopped && this.auth===identity && !this.signedOut)
-                emit({type:'chat-lookup',...request,seat});
+                emit({type:'chat-lookup',...request,seat, ...(request.favorite ? {profile,avatar,seatKnown:availabilityKnown} : {})});
+            const queued=this.queuedChatLookup;
+            this.queuedChatLookup=null;
+            if(queued && !stopped && this.auth===identity && !this.signedOut)this.lookupChatSeat(queued);
         };
+        if(request.favorite && !request.stateOnly)view.connect('resource-load-started',(_view,resource,resourceRequest)=>{
+            const uri=resourceRequest.get_uri() || '';
+            if (/^https:\/\/intrapy\.intra\.42\.fr\/api\/v1\/users(?:[/?]|$)/.test(uri)) {
+                resource.connect('finished', () => {
+                    const response = resource.get_response();
+                    if (response?.get_status_code() !== 200 || !/json/i.test(response.get_mime_type() || '')) return;
+                    resource.get_data(this.cancel, (item, result) => {
+                        try {
+                            const bytes = item.get_data_finish(result);
+                            if (finished || !bytes?.length || bytes.length > 2000000) return;
+                            const found = imports.models.favoriteProfile.fromResponse(JSON.parse(ByteArray.toString(bytes)), request.login);
+                            if (found) profile = found;
+                        } catch (_) {}
+                    });
+                });
+                return;
+            }
+            // Match the actual profile portrait URL, not an assumed login filename.
+            if(!/^https:\/\/cdn\.intra\.42\.fr\/users\//.test(uri))return;
+            images.set(uri,resource);
+            resource.connect('finished',readAvatar);
+        });
         view.connect('permission-request',(_view,permission)=>{permission.deny();return true;});
         view.connect('decide-policy',(_view,decision,type)=>{
             if(type===WebKit2.PolicyDecisionType.NEW_WINDOW_ACTION ||
@@ -363,14 +410,22 @@ class Worker {
         });
         const timer=GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,1,()=>{
             if(++attempts>15 || stopped || this.auth!==identity){finish(null);return GLib.SOURCE_REMOVE;}
-            if(reading || view.is_loading)return GLib.SOURCE_CONTINUE;
+            if(reading || (!request.favorite && view.is_loading))return GLib.SOURCE_CONTINUE;
             reading=true;
-            view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`,'pingoose-chat-lookup',null,(page,result)=>{
+            const script=`JSON.stringify({seat:Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null, unavailable:Array.from(document.querySelectorAll('div,span')).some(e=>!e.children.length && e.textContent.trim().toLowerCase()==='unavailable'), profile:${request.stateOnly ? 'null' : `(${imports.models.favoriteProfile.readDOM.toString()})(${JSON.stringify(request.login)})`}})`;
+            view.run_javascript_in_world(script,'pingoose-chat-lookup',null,(page,result)=>{
                 reading=false;
                 if(this.chatLookup!==view)return;
                 try{
-                    const seat=JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
-                    if(seat){GLib.source_remove(timer);finish(seat.toLowerCase());}
+                    const data=JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
+                    const seat=data.seat?.toLowerCase() || null;
+                    if(request.favorite){
+                        availabilityKnown = !!seat || !!data.unavailable;
+                        if(!profile && data.profile?.profileLogin===request.login && data.profile.name)profile={name:data.profile.name};
+                        if(data.profile?.profileLogin===request.login)avatarURL=data.profile.avatar || null;
+                        readAvatar();
+                        if((profile || request.stateOnly) && availabilityKnown && (request.avatarCached || avatar || (!avatarURL && attempts>=5) || attempts>=14)){GLib.source_remove(timer);finish(seat);}
+                    }else if(seat){GLib.source_remove(timer);finish(seat);}
                 }catch(_){}
             });
             return GLib.SOURCE_CONTINUE;
@@ -499,7 +554,10 @@ class Worker {
 
     lookupSeat(row, login, identity) {
         // Separate hidden view keeps the signed-in user's profile intact.
+        const avatarCached = (row.avatars || []).includes(login) &&
+            Gio.File.new_for_path(`${this.stateDirectory}/counterpart-${login}`).query_exists(null);
         const view = new WebKit2.WebView({web_context: this.context});
+        if (avatarCached) view.get_settings().set_auto_load_images(false);
         view.get_settings().set_enable_write_console_messages_to_stdout(false);
         view.connect('permission-request', (_view, request) => { request.deny(); return true; });
         view.connect('decide-policy', (_view, decision, type) => {
@@ -511,7 +569,7 @@ class Worker {
         });
         let avatarSaved = false;
         let foundSeat = null;
-        view.connect('resource-load-started', (_view, resource, request) => {
+        if (!avatarCached) view.connect('resource-load-started', (_view, resource, request) => {
             const uri = request.get_uri() || '';
             const match = uri.match(/^https:\/\/cdn\.intra\.42\.fr\/users\/.*\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i);
             if (!match || match[1] !== login) return;
@@ -568,7 +626,7 @@ class Worker {
             }
             if (notify) emit({type: 'notification', update:true, id: `reminder:${row.id}:${row.begin}:${login}`, body: `Evaluation match confirmed · ${row.project}\n${login} · Seat: ${seat || 'Unavailable'}`});
         };
-        const lookupLimit=row.chatConfirmedAt?.[login]?5:15;
+        const lookupLimit = row.chatConfirmedAt?.[login] && avatarCached ? 5 : 15;
         let attempts = 0;
         const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             if (finished) return GLib.SOURCE_REMOVE;
@@ -578,7 +636,7 @@ class Worker {
                 try {
                     const seat = JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
                     if (seat) foundSeat = seat;
-                    if (foundSeat && (avatarSaved || attempts >= 4)) { GLib.source_remove(timer); finish(foundSeat); }
+                    if (foundSeat && (avatarSaved || avatarCached)) { GLib.source_remove(timer); finish(foundSeat); }
                 } catch (_) {}
             });
             return GLib.SOURCE_CONTINUE;

@@ -116,7 +116,7 @@ var Controller = class Controller {
                 if(this._settings.get_boolean('auto-close-panels')){
                     if(this._servicePanel){this._servicePanel.expanded=false;this._servicePanel.sync();}
                     if(this._projectPanel){this._projectPanel.capture();this._projectPanel.expanded=false;this._projectPanel.sync();}
-                    if(this._chatPanel){this._chatPanel._expanded=false;this._chatPanel.sync();}
+                    if(this._chatPanel){if(this._chatPanel._favorites)this._chatPanel._favorites.expanded=false;this._chatPanel._expanded=false;this._chatPanel.sync();}
                 }
             }
             if (open) {

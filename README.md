@@ -158,6 +158,7 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 
 | 항목 | 기본값 / 동작 |
 | --- | --- |
+| Auto-hide scrollbars | 켜짐. 스크롤을 멈추면 0.9초 후 스크롤바 숨김 |
 | Top Bar Animation | 켜짐. 끄면 고정 아이콘 표시. 시스템 애니메이션 설정도 따름 |
 | 영역 표시 | Profile, My Projects, Logtime, Evaluation Slots, Evaluation Info, Agenda, Notifications, 42 Services 모두 켜짐 |
 | 영역 순서 | Profile → My Projects & Logtime → Evaluation Slots → Evaluation Info → Agenda → Notifications → 42 Services |

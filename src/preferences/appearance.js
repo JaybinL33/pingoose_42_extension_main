@@ -6,6 +6,9 @@ function build(settings) {
     const animation=new Gtk.Switch({valign:Gtk.Align.CENTER});
     settings.bind('topbar-animation',animation,'active',Gio.SettingsBindFlags.DEFAULT);
     Common.row(box,'Top Bar Animation',animation);
+    const scrollbars = new Gtk.Switch({valign: Gtk.Align.CENTER});
+    settings.bind('auto-hide-scrollbars', scrollbars, 'active', Gio.SettingsBindFlags.DEFAULT);
+    Common.row(box, 'Auto-hide scrollbars', scrollbars);
     box.append(new Gtk.Label({label: 'Show or hide cards and use the arrows to change their order.\nMy Projects and Logtime share one row. Hidden cards keep their position. Use Apply to save the new order.', xalign: 0, wrap: true}));
     const list = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 10});
     const scroll = new Gtk.ScrolledWindow({vexpand: true, min_content_height: 360,

@@ -22,6 +22,7 @@ var ChatPanel = class ChatPanel {
         this._blocked = this._settings.get_strv('blocked-chat-seats');
         this._expanded = this._settings.get_boolean('expand-chat');
         this._buildChat();
+        this._favorites = new Me.imports.ui.favorites.Panel(this);
         this.sync();
         this._settingsSignal = this._settings.connect('changed', (_settings, key) => {
             this.sync();
@@ -57,6 +58,7 @@ var ChatPanel = class ChatPanel {
         this._updatePanelLabel();
         this._chatUi.toggle.style_class='pingoose-visit-intra'+(this._chatUi.root.visible ? ' pingoose-toggle-active' : '');
         if(this._settings.get_boolean('expand-chat')!==this._expanded)this._settings.set_boolean('expand-chat',this._expanded);
+        this._favorites?.sync();
         this._indicator.syncPanelLayout?.();
         if (this._expanded && this._indicator.menu.isOpen && !this._indicator.loginOnly && this._chatActive)
             this._chat.markRead(this._chatActive);
@@ -86,6 +88,7 @@ var ChatPanel = class ChatPanel {
         this._selectChat(key);this.sync();
     }
     completeLookup(message){
+        if (message.favorite) { this._favorites?.complete(message); return; }
         if(!this._lookup || message.request!==this._lookup.request || message.login!==this._lookup.login)return;
         this._lookup=null;
         const ui=this._chatUi;
@@ -96,7 +99,16 @@ var ChatPanel = class ChatPanel {
         }
         this._connectPeer(message.seat, message.login);
     }
+    _resetPeerInput() {
+        const ui = this._chatUi;
+        ui.peerEntry.text = '';
+        ui.peerEntry.remove_style_class_name('pingoose-chat-entry-error');
+        ui.peerFeedback.text = '';
+        ui.peerFeedback.hide();
+        ui.peerRow.hide();
+    }
     _setConnectBusy(busy) {
+        if (!busy) this._favorites?.finishConnect();
         const ui = this._chatUi;
         ui.connectSpinner.visible = busy;
         ui.connectLabel.visible = !busy;
@@ -142,6 +154,7 @@ var ChatPanel = class ChatPanel {
         CountLabel.update(this._chatUi.toggle.get_child(), 'Cluster Chat', count > 5 ? '5+' : count, this._chatUi.root.visible);
     }
     reset() {
+        this._favorites?.reset();
         this._chatBannerSource?.destroy();
         this._chatBannerSource = null;
         this._expanded = false;
@@ -164,6 +177,7 @@ var ChatPanel = class ChatPanel {
         this.sync();
     }
     destroy() {
+        this._favorites?.destroy();
         this._chatBannerSource?.destroy();
         this._chatBannerSource = null;
         this._settings.disconnect(this._settingsSignal);
@@ -241,9 +255,14 @@ var ChatPanel = class ChatPanel {
         const add = ui.add = new St.Button({label: '+', can_focus: true, y_align: center,
             accessible_name: 'New chat', style_class: 'pingoose-chat-add'});
         chipRow.add_child(add);
+        ui.favorites = new St.Button({label: '☆', accessible_name: 'Favorites', can_focus: true,
+            y_align: center, visible: false, style_class: 'pingoose-chat-add'});
+        ui.favorites.connect('clicked', () => this._favorites?.toggle());
+        chipRow.add_child(ui.favorites);
         root.add_child(chipRow);
 
         ui.peerRow = new St.BoxLayout({visible: false, style_class: 'pingoose-chat-input-row'});
+        ui.peerRow.connect('notify::visible', () => { ui.add.style_class = 'pingoose-chat-add' + (ui.peerRow.visible ? ' pingoose-toggle-active' : ''); });
         ui.peerEntry = new St.Entry({hint_text: 'Seat number or Intra ID', can_focus: true,
             x_expand: true, style_class: 'pingoose-chat-entry'});
         const connect = ui.connect = new St.Button({can_focus: true, accessible_name: 'Connect', style_class: 'pingoose-chat-send'});
@@ -284,9 +303,9 @@ var ChatPanel = class ChatPanel {
         connect.connect('clicked', submitPeer);
         add.connect('clicked', () => {
             if (this._lookup || this._pendingConnection) return;
-            ui.peerEntry.text = '';
-            ui.peerFeedback.hide();
-            ui.peerRow.visible = !ui.peerRow.visible;
+            const open = !ui.peerRow.visible;
+            this._resetPeerInput();
+            ui.peerRow.visible = open;
             if (ui.peerRow.visible) global.stage.set_key_focus(ui.peerEntry);
         });
 
@@ -336,6 +355,8 @@ var ChatPanel = class ChatPanel {
         ui.send.connect('clicked', submit);
         this._bindChatSignals();
         indicator.menu.connect('open-state-changed', (_menu, open) => {
+            this._resetPeerInput();
+            this._favorites?.resetInput();
             this.sync();
             if (!open || !this._chat || !this._expanded) return;
             if (this._chatActive) this._chat.markRead(this._chatActive);
