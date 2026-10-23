@@ -21,6 +21,7 @@ class Pingoose {
         this._flashTimer = 0;
         this._lastFlash = -Infinity;
         this._settings = imports.misc.extensionUtils.getSettings();
+        this._bannerDuration = new Me.imports.services.bannerDuration.Controller(this._settings);
         this._notificationSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.notifications'});
         this._indicator = new Indicator();
         this._indicator.onLogin = () => this._send('login');
@@ -348,6 +349,8 @@ class Pingoose {
     }
 
     disable() {
+        this._bannerDuration?.destroy();
+        this._bannerDuration = null;
         this._updater?.destroy();
         this._updater = null;
         this._projectPanel?.destroy();

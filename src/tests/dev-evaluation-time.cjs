@@ -18,3 +18,16 @@ const withAgenda=context.addOptions(new Item(),()=>{},()=>{},{get_int:()=>0,get_
 withAgenda.items[2].activate();withAgenda.items[2].activate();
 assert.equal(agendas.length,2);assert(agendas.every(row=>row.devTest));assert.notEqual(agendas[0].id,agendas[1].id);
 assert(Date.parse(agendas[0].end)>Date.parse(agendas[0].begin));
+const settingsSource=fs.readFileSync('src/ui/settings.js','utf8');
+const begin=settingsSource.indexOf("                if(!Flags.enabled(this._settings,'hidden-dev-options'))return;");
+const end=settingsSource.indexOf('            },this._settings',begin);
+const notices=[];
+const create=vm.runInNewContext('(function(row){'+settingsSource.slice(begin,end)+'})',{
+ Flags:{enabled:()=>true},Me:{imports:{models:{evaluations:require('../models/evaluations.js')}}},
+ GLib:{get_user_name:()=> 'fixture',get_host_name:()=> 'c1r1s1'},settings:{close(){}},
+});
+const owner={_settings:{},_indicator:{},_evaluations:[],_saveCardState(){},_renderEvaluations(){},_message:message=>notices.push(message)};
+for(const row of rows)create.call(owner,row);
+assert.equal(notices.length,3);
+assert(notices.every((notice,index)=>notice.body.includes(rows[index].project) && notice.type==='notification'));
+console.log('PASS: test evaluation creation emits match details for past, within-15-minutes and now');

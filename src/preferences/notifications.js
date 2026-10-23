@@ -14,6 +14,10 @@ function build(settings) {
         Common.row(box, label, toggle);
     }
     box.append(new Gtk.Label({label: 'This warning checks open slots, scheduled evaluations and past evaluations awaiting feedback confirmation. Turning it off does not close slots or cancel evaluations.', wrap: true, xalign: 0}));
+    const duration = Gtk.SpinButton.new_with_range(0, 120, 1);
+    settings.bind('notification-duration', duration, 'value', Gio.SettingsBindFlags.DEFAULT);
+    Common.row(box, 'Banner duration (seconds)', duration);
+    box.append(new Gtk.Label({label: '0 = Keep until dismissed. Default: 4 seconds.', wrap: true, xalign: 0}));
     const flash = Gtk.SpinButton.new_with_range(0, 5, 1);
     settings.bind('flash-count', flash, 'value', Gio.SettingsBindFlags.DEFAULT);
     Common.row(box, 'Screen flash (0 = Off)', flash);

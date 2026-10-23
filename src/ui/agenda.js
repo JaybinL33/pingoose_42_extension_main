@@ -38,7 +38,7 @@ var Controller = class Controller {
                 const header=new St.BoxLayout({x_expand:true});
                 const title=new St.Label({text:row.name,x_expand:true,style_class:'pingoose-evaluation-title'});
                 title.clutter_text.line_wrap=true; title.clutter_text.ellipsize=Pango.EllipsizeMode.NONE; header.add_child(title);
-                if(row.feedback || row.subscribed) header.add_child(new St.Label({text:row.feedback ? 'Feedback required' : 'Subscribed',style_class:row.feedback ? 'pingoose-agenda-feedback-required' : 'pingoose-agenda-subscribed',y_align:Clutter.ActorAlign.CENTER}));
+                if(row.feedback || row.subscribed) header.add_child(new St.Label({text:row.feedback ? 'Feedback required' : 'Registered',style_class:row.feedback ? 'pingoose-agenda-feedback-required' : 'pingoose-agenda-subscribed',y_align:Clutter.ActorAlign.CENTER}));
                 const remove=new St.Button({label:'⋮',accessible_name:'Agenda options',can_focus:true,
                     style_class:'pingoose-note-options',x_align:Clutter.ActorAlign.END,y_align:Clutter.ActorAlign.CENTER});
                 const options=new PopupMenu.PopupMenu(remove,1.0,St.Side.TOP);
@@ -85,7 +85,7 @@ var Controller = class Controller {
             {
                 text(`${new Date(row.begin).toLocaleString('en-GB')} – ${new Date(row.end).toLocaleString('en-GB')}`,true);
                 if (row.location) text(`Location: ${row.location}`,true);
-                text(`Subscribed: ${row.subscribers ?? 'Unknown'} / ${row.capacity > 0 ? row.capacity : row.capacity === null || row.capacity === undefined ? 'Unknown' : 'Unlimited'}`,true);
+                text(`Registered: ${row.subscribers ?? 'Unknown'} / ${row.capacity > 0 ? row.capacity : row.capacity === null || row.capacity === undefined ? 'Unknown' : 'Unlimited'}`,true);
                 if (row.unsubscriptionDelay > 0) text(`Cancellation deadline: ${new Date(Date.parse(row.begin)-row.unsubscriptionDelay*3600000).toLocaleString('en-GB')}`);
                 if (row.description) text(row.description);
                 if (row.kind === 'exam') text('Register for both the exam session and the exam project to attend.');

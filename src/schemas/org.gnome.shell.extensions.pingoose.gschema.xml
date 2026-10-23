@@ -30,6 +30,12 @@
       <default>'dark'</default>
       <summary>Profile menu color theme</summary>
     </key>
+    <key name="notification-duration" type="i">
+      <range min="0" max="120"/>
+      <default>4</default>
+      <summary>System notification banner duration in seconds</summary>
+      <description>Zero keeps Pingoose banners visible until dismissed.</description>
+    </key>
     <key name="flash-count" type="i">
       <range min="0" max="5"/>
       <default>1</default>

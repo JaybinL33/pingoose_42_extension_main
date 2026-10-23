@@ -28,7 +28,10 @@ var SystemSessionHook = class SystemSessionHook {
                 }
                 const future = result.rows.filter(slot => !slot.matched && Date.parse(slot.end) > Date.now());
                 const evaluations=result.rows.filter(slot=>slot.matched && Date.parse(slot.end)>Date.now());
-                const pendingFeedback=hook._evaluations().filter(row=>!row.missing && !row.devTest && Number.isFinite(Date.parse(row.begin)) && Date.parse(row.begin)<=Date.now());
+                const cards = hook._evaluations().filter(row => !row.missing && Number.isFinite(Date.parse(row.begin)));
+                const pendingFeedback = cards.filter(row => Date.parse(row.begin) <= Date.now());
+                for (const row of cards.filter(row => row.devTest && Date.parse(row.begin) > Date.now()))
+                    evaluations.push({...row, start: row.begin, end: null});
                 if (!future.length && !evaluations.length && !pendingFeedback.length) { proceed(); return; }
                 Main.notify('42Intra · Evaluation reminders', 'Review the pending items before logging out.');
                 hook._dialog = new SlotConfirmDialog(future, action => {

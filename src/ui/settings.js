@@ -74,6 +74,7 @@ var Controller = class Controller {
                 row.users=[login];row.seats={[login]:/^c\d+r\d+s\d+$/.test(seat)?seat:'Unavailable'};
                 row.devSelf=true;row.avatars=[login];row.chatConfirmedAt={[login]:Date.now()};
                 this._evaluations=[...this._evaluations,row];this._saveCardState();this._renderEvaluations();settings.close();
+                this._message(Me.imports.models.evaluations.notification(row));
             },this._settings,row=>{
                 if(!Flags.enabled(this._settings,'hidden-dev-options'))return;
                 this._agendaAll=[...(this._agendaAll || this._agenda),row];this._agenda=[...this._agenda,row];this._renderAgenda();settings.close();

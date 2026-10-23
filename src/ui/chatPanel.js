@@ -306,12 +306,15 @@ var ChatPanel = class ChatPanel {
         ui.entry = new St.Entry({can_focus: true, x_expand: true, style_class: 'pingoose-chat-entry'});
         ui.entry.clutter_text.max_length = 1000;
         ui.entry.clutter_text.set_selectable(true);
-        // Let drags starting in the entry's padding use Clutter.Text's native
-        // selection and pointer grab, just like drags starting on a glyph.
+        ui.entry.clutter_text.reactive = true;
+        // Forward only padding clicks; glyph events already reach Clutter.Text.
         ui.entry.connect('button-press-event', (_actor, event) => {
-            if (!ui.entry.reactive || event.get_button() !== 1)
+            if (!ui.entry.reactive || event.get_button() !== 1 ||
+                event.get_source() !== ui.entry)
                 return Clutter.EVENT_PROPAGATE;
-            return ui.entry.clutter_text.event(event, false);
+            ui.entry.clutter_text.grab_key_focus();
+            ui.entry.clutter_text.event(event, false);
+            return Clutter.EVENT_STOP;
         });
         ui.send = new St.Button({can_focus: true, accessible_name: 'Send', style_class: 'pingoose-chat-send'});
         ui.send.set_child(new St.Icon({
@@ -421,11 +424,11 @@ var ChatPanel = class ChatPanel {
         ui.stick = true;
         const peer = this._chatActive ? this._chat.peer(this._chatActive) : null;
         ui.entry.reactive = ui.send.reactive = !!peer;
-        ui.entry.hint_text = peer ? `Message ${peer.key}…` : 'Open a chat from an evaluation card';
+        ui.entry.hint_text = peer ? `Message ${peer.key}…` : 'No connected chats.';
         if (!peer?.history.length) {
             ui.placeholder = wrapLabel(new St.Label({x_expand: true, style_class: 'pingoose-chat-empty',
                 text: peer ? 'No messages yet.'
-                    : 'Open a confirmed evaluation chat before its start time.'}));
+                    : 'No connected chats.'}));
             ui.log.add_child(ui.placeholder);
             return;
         }
@@ -447,7 +450,29 @@ var ChatPanel = class ChatPanel {
         const bubble = new St.BoxLayout({vertical: true, x_expand: true, x_align: align,
             style_class: `pingoose-chat-bubble pingoose-chat-bubble-${out ? 'out' : 'in'}`});
         // Plain text only: peer input must never be parsed as Pango markup.
-        bubble.add_child(wrapLabel(new St.Label({text: entry.text, style_class: 'pingoose-chat-text'})));
+        const message = wrapLabel(new St.Label({text: entry.text, reactive: true,
+            can_focus: true, style_class: 'pingoose-chat-text'}));
+        const text = message.clutter_text;
+        text.reactive = true;
+        text.set_selectable(true);
+        text.set_editable(false);
+        // St.Label does not apply St.Entry's selection CSS to its Clutter.Text.
+        const selectionColors = () => {
+            text.set_selection_color(new Clutter.Color({red: 133, green: 214, blue: 203, alpha: 255}));
+            text.set_selected_text_color(new Clutter.Color({red: 16, green: 35, blue: 32, alpha: 255}));
+        };
+        message.connect('style-changed', selectionColors);
+        selectionColors();
+        text.connect('key-press-event', (_actor, event) => {
+            if ((event.get_state() & Clutter.ModifierType.CONTROL_MASK) &&
+                [Clutter.KEY_c, Clutter.KEY_C].includes(event.get_key_symbol())) {
+                const selection = text.get_selection();
+                if (selection) St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, selection);
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        bubble.add_child(message);
         bubble.add_child(new St.Label({text: entry.time, x_align: align, style_class: 'pingoose-chat-time'}));
         ui.log.add_child(bubble);
     }
@@ -488,6 +513,7 @@ var ChatPanel = class ChatPanel {
             Main.messageTray.add(this._chatBannerSource);
         }
         const banner = new MessageTray.Notification(this._chatBannerSource, `Cluster Chat · ${key}`, text.slice(0, 200));
+        banner.pingooseBanner = true;
         banner.setTransient(true);
         banner.connect('activated', () => {
             if (!this._chat.peer(key)) return;

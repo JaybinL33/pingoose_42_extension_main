@@ -149,6 +149,7 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | New agenda events | 켜짐 |
 | Cluster Chat messages | 켜짐 |
 | Warn about slots and evaluations before logout | 켜짐. PC 로그아웃 시 열린 슬롯·예정된 평가·피드백 완료 미확인 평가 안내 |
+| Banner duration (seconds) | 4초, 0~120초. 0은 직접 닫을 때까지 유지 |
 | Screen flash (0 = Off) | 1회, 0~5회 |
 
 로그아웃 확인창은 열린 슬롯, 예정된 평가, 피드백 완료 확인이 남은 지난 평가를 별도 목록으로 표시합니다. 지난 평가는 핑구스에서 완료 확인하지 않은 카드 기준이며 서버의 실제 미작성 여부를 확정하는 표시는 아닙니다. 프로젝트명·역할·상대 닉네임·시작 시간을 함께 표시합니다. 평가에는 서버가 제공한 프로젝트명과 시간을 표시하며, 슬롯 닫기를 선택해도 예약된 평가는 유지됩니다. 로그아웃 경고를 꺼도 서버 슬롯이 자동으로 닫히지는 않습니다.
@@ -192,11 +193,11 @@ PC 로그인 후 확장이 시작되면 해당 세션에서 한 번 GitHub의 `m
 
 설치할 커밋을 확정한 뒤 `~/.local/state/pingoose/updates/checkout-*`에 클론하고 해당 커밋의 `./install.sh`를 실행합니다. 성공·실패 후 임시 클론을 정리합니다. 완료 알림이 나오면 GNOME Shell을 재시작하거나 다시 로그인해야 적용됩니다. 세션은 자동 재시작하지 않습니다. Git과 인터넷 연결이 필요합니다.
 
-기본 저장소는 `src/config/update.json`의 `https://github.com/ksmsky8385/pingoose`입니다. 설치 후에도 유지할 사용자 설정은 `~/.config/pingoose/update.json`에 아래 형식으로 둘 수 있습니다. 이 파일이 있으면 기본 설정보다 우선합니다.
+기본 저장소는 `src/config/update.json`의 `https://github.com/Pingoose-42/pingoose_42_extension`입니다. 설치 후에도 유지할 사용자 설정은 `~/.config/pingoose/update.json`에 아래 형식으로 둘 수 있습니다. 이 파일이 있으면 기본 설정보다 우선합니다.
 
 ```json
 {
-  "repository": "https://github.com/ksmsky8385/pingoose",
+  "repository": "https://github.com/Pingoose-42/pingoose_42_extension",
   "branch": "main"
 }
 ```

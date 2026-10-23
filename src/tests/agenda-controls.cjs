@@ -62,13 +62,13 @@ const originalCard=section.items[0];
 click('Details');
 assert.equal(detailsBox.visible,true);assert.equal(section.items[0],originalCard,'toggling preserves card actors and focus');
 assert(section.items.flatMap(all).some(actor=>actor.text==='Details from Intra'));
-assert(section.items.flatMap(all).some(actor=>actor.text==='Subscribed: 5 / 100'));
+assert(section.items.flatMap(all).some(actor=>actor.text==='Registered: 5 / 100'));
 click('Subscribe');assert.equal(p.sent,'agenda:subscribe:1');assert.equal(p._agendaBusy,'1');
 p._renderAgenda();assert(section.items.flatMap(all).some(actor=>actor.label==='Details'));
 console.log('PASS: details expand in card, show capacity/body, retain expansion and dispatch explicit subscription action');
 
 p._agenda=[{...detail,subscribed:true}];p._renderAgenda();
-assert(section.items.flatMap(all).some(actor=>actor.text==='Subscribed'));
+assert(section.items.flatMap(all).some(actor=>actor.text==='Registered'));
 assert(!section.items.flatMap(all).some(actor=>/You are .*subscribed/.test(actor.text || '')));
 const body=section.items.flatMap(all).find(actor=>actor.text==='Details from Intra');
 assert.equal(body.clutter_text.ellipsize,0);
@@ -77,7 +77,7 @@ assert.equal(body.height,undefined,'full body has no preview height limit');
 console.log('PASS: full description without preview controls or clipping');
 p._agenda=[{...detail,subscribed:true,feedback:true}];p._renderAgenda();
 assert(section.items.flatMap(all).some(actor=>actor.text==='Feedback required'));
-assert(!section.items.flatMap(all).some(actor=>actor.text==='Subscribed'));
+assert(!section.items.flatMap(all).some(actor=>actor.text==='Registered'));
 
 let pending;
 ctx.imports.gi.Meta.later_add=(_type,callback)=>{pending=callback;return 1;};

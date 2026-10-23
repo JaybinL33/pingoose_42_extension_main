@@ -9,7 +9,7 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('updater', Path(__file__).parents[1] / 'worker/updater.py')
 updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
-CONFIG = {'repository': 'https://github.com/ksmsky8385/pingoose', 'branch': 'main'}
+CONFIG = {'repository': 'https://github.com/Pingoose-42/pingoose_42_extension', 'branch': 'main'}
 A, B = 'a' * 40, 'b' * 40
 
 

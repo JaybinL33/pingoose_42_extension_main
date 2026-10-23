@@ -32,13 +32,19 @@ var Controller = class Controller {
             this._bannerSource.connect('destroy', () => { this._bannerSource = null; });
             Main.messageTray.add(this._bannerSource);
         }
-        const title = message.test ? 'Test notification' : message.category === 'agenda' ? 'New agenda event' :
+        const title = message.test ? 'Test notification' : message.category === 'agenda' ? 'New Agenda Event' :
             message.id.startsWith('missing:') ? 'Evaluation missing' :
             message.id.startsWith('reminder:') ? 'Evaluation reminder' :
             message.id.startsWith('seat:') ? 'Evaluation location' :
-            message.id.startsWith('rescheduled:') ? 'Evaluation rescheduled' : 'Evaluation matched';
-        const banner = new MessageTray.Notification(this._bannerSource, title,
-            'Open Pingoose to view details.');
+            message.id.startsWith('rescheduled:') ? 'Evaluation rescheduled' : 'New Evaluation Matched';
+        // Keep the event details already supplied by the worker; omit repeated headings.
+        const body = message.body
+            .replace(/^You have been matched with someone\.\s*/i, '')
+            .replace(/^New agenda event\s*·\s*/i, '')
+            .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+            .trim().slice(0, 350);
+        const banner = new MessageTray.Notification(this._bannerSource, title, body);
+        banner.pingooseBanner = true;
         banner.setTransient(true);
         banner.connect('activated', () => this._indicator?.menu.open());
         this._bannerSource.showNotification(banner);

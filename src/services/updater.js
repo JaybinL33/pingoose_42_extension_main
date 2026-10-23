@@ -64,6 +64,7 @@ var Updater = class Updater {
             Main.messageTray.add(this._source);
         }
         const notice = new MessageTray.Notification(this._source, title, body);
+        notice.pingooseBanner = true;
         notice.setTransient(!actions.length);
         notice.setResident(!!actions.length);
         for (const [label, action] of actions) notice.addAction(label, () => { notice.destroy(); action(); });

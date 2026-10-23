@@ -22,15 +22,15 @@ var SlotConfirmDialog = GObject.registerClass(class SlotConfirmDialog extends Mo
         for(const slot of slots)text(`${format(slot.start)} – ${format(slot.end)}`);
         if(evaluations.length){
             text(`Scheduled evaluations · ${evaluations.length}`,true);
-            for(const evaluation of evaluations)text(`${evaluation.project || 'Evaluation'}
-${format(evaluation.start)} – ${format(evaluation.end)}`,true);
+            for(const evaluation of evaluations)text(`${evaluation.devTest ? '[Test] ' : ''}${evaluation.project || 'Evaluation'}
+${format(evaluation.start)}${evaluation.end ? ' – ' + format(evaluation.end) : ''}`,true);
             if (slots.length) text('Closing open slots does not cancel these evaluations.');
         }
         if(pendingFeedback.length){
             text(`Feedback confirmation pending · ${pendingFeedback.length}`,true);
             for(const evaluation of pendingFeedback){
                 const role=['evaluator','corrector'].includes(evaluation.kind)?'Evaluator':'Evaluatee';
-                text(`${evaluation.project || 'Evaluation'} · ${role}
+                text(`${evaluation.devTest ? '[Test] ' : ''}${evaluation.project || 'Evaluation'} · ${role}
 ${format(evaluation.begin)}
 ${(evaluation.users || []).map(login=>'@'+login).join(', ')}`,true);
             }
