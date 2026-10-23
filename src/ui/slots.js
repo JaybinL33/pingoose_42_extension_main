@@ -1,3 +1,4 @@
+const CountLabel = imports.misc.extensionUtils.getCurrentExtension().imports.ui.countLabel;
 const {Clutter, GLib, Pango, St} = imports.gi;
 const PopupMenu = imports.ui.popupMenu;
 
@@ -29,7 +30,7 @@ var Controller = class Controller {
     _renderSlots() {
         this._syncOptionalSections();
         const indicator = this._indicator;
-        indicator.visitIntra.get_child().text = `Evaluation Slots${this._slots?.length ? ` · ${this._slots.length}` : ''}`;
+        CountLabel.update(indicator.visitIntra.get_child(), 'Evaluation Slots', this._slots?.length || 0, this._slotsExpanded);
         indicator.visitIntra.style_class='pingoose-visit-intra'+(this._slotsExpanded ? ' pingoose-toggle-active' : '');
         const section = indicator.slotItems;
         section.removeAll();

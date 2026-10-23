@@ -1,3 +1,4 @@
+const CountLabel = imports.misc.extensionUtils.getCurrentExtension().imports.ui.countLabel;
 // Chat UI adapted from origin/deeeev-gangjeon; displayed beside the main menu.
 const {Clutter, Gio, GLib, Pango, St} = imports.gi;
 const Main = imports.ui.main;
@@ -53,6 +54,7 @@ var ChatPanel = class ChatPanel {
             if(!general && !this._selectedEvaluation)this._expanded=false;
         }
         this._chatUi.root.visible=active && this._expanded && (general || !!this._chatActive);
+        this._updatePanelLabel();
         this._chatUi.toggle.style_class='pingoose-visit-intra'+(this._chatUi.root.visible ? ' pingoose-toggle-active' : '');
         if(this._settings.get_boolean('expand-chat')!==this._expanded)this._settings.set_boolean('expand-chat',this._expanded);
         this._indicator.syncPanelLayout?.();
@@ -137,7 +139,7 @@ var ChatPanel = class ChatPanel {
     }
     _updatePanelLabel() {
         const count = this._chat.unread;
-        this._chatUi.toggle.label = count ? `Cluster Chat · ${count > 5 ? '5+' : count}` : 'Cluster Chat';
+        CountLabel.update(this._chatUi.toggle.get_child(), 'Cluster Chat', count > 5 ? '5+' : count, this._chatUi.root.visible);
     }
     reset() {
         this._chatBannerSource?.destroy();

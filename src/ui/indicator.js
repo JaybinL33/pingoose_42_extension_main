@@ -1,3 +1,4 @@
+const CountLabel = imports.misc.extensionUtils.getCurrentExtension().imports.ui.countLabel;
 const {Clutter, Gio, GLib, GObject, Pango, St} = imports.gi;
 const PanelMenu = imports.ui.panelMenu;
 const PopupMenu = imports.ui.popupMenu;
@@ -223,7 +224,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         button.set_child(new St.Label({text:title,x_expand:true,x_align:Clutter.ActorAlign.CENTER}));
         button.expanded=key ? preferences.get_boolean(key) : true;
         button.updateCount=count=>{
-            button.get_child().text=`${title}${count ? ' · '+count : ''}`;
+            CountLabel.update(button.get_child(), title, count, button.expanded);
             button.style_class='pingoose-visit-intra pingoose-section-toggle'+(button.expanded ? ' pingoose-toggle-active' : '');
             button.sectionCount=count;
             content.visible=button.expanded;

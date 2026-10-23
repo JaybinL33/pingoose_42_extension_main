@@ -6,7 +6,8 @@ class Actor{
  connect(name,fn){this[name]=fn;}
 }
 const source=fs.readFileSync('src/ui/indicator.js','utf8');
-const context={imports:{misc:{extensionUtils:{getSettings:()=>({get_boolean:()=>true,set_boolean(){}})}}},St:{Button:Actor,Label:Actor},Clutter:{ActorAlign:{CENTER:0}}};
+const CountLabel={update(label,title,count){label.text=title+(count?' · '+count:'');}};
+const context={CountLabel,imports:{misc:{extensionUtils:{getSettings:()=>({get_boolean:()=>true,set_boolean(){}})}}},St:{Button:Actor,Label:Actor},Clutter:{ActorAlign:{CENTER:0}}};
 vm.createContext(context);
 vm.runInContext('var Probe=class {'+source.slice(source.indexOf('    _sectionToggle('),source.indexOf('    _initFlapIcon()'))+'}',context);
 for(const title of ['Agenda','Evaluation Info','Notifications']){
