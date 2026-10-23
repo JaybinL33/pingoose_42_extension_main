@@ -193,11 +193,11 @@ PC 로그인 후 확장이 시작되면 해당 세션에서 한 번 GitHub의 `m
 
 설치할 커밋을 확정한 뒤 `~/.local/state/pingoose/updates/checkout-*`에 클론하고 해당 커밋의 `./install.sh`를 실행합니다. 성공·실패 후 임시 클론을 정리합니다. 완료 알림이 나오면 GNOME Shell을 재시작하거나 다시 로그인해야 적용됩니다. 세션은 자동 재시작하지 않습니다. Git과 인터넷 연결이 필요합니다.
 
-기본 저장소는 `src/config/update.json`의 `https://github.com/Pingoose-42/pingoose_42_extension`입니다. 설치 후에도 유지할 사용자 설정은 `~/.config/pingoose/update.json`에 아래 형식으로 둘 수 있습니다. 이 파일이 있으면 기본 설정보다 우선합니다.
+기본 저장소는 `src/config/update.json`의 `https://github.com/Pingoose-42/pingoose_42_extension_main`입니다. 설치 후에도 유지할 사용자 설정은 `~/.config/pingoose/update.json`에 아래 형식으로 둘 수 있습니다. 이 파일이 있으면 기본 설정보다 우선합니다.
 
 ```json
 {
-  "repository": "https://github.com/Pingoose-42/pingoose_42_extension",
+  "repository": "https://github.com/Pingoose-42/pingoose_42_extension_main",
   "branch": "main"
 }
 ```
