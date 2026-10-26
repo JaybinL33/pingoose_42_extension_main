@@ -6,6 +6,7 @@ var Panel = class Panel {
     constructor(chat) {
         this.chat = chat;
         this.settings = chat._settings;
+        this.availableOnly = this.settings.get_boolean('chat-favorites-available-only');
         this.rows = [];
         try { this.rows = JSON.parse(this.settings.get_string('chat-favorites')).filter(row => /^[a-z0-9_-]{1,64}$/.test(row.login) && typeof row.name === 'string').slice(0, 50); } catch (_) {}
         this.seats = new Map(Me.imports.services.favoriteCache.read().filter(([login]) => this.rows.some(row => row.login === login)));
@@ -29,6 +30,8 @@ var Panel = class Panel {
         refreshContent.add_child(this.refreshSpinner);
         refresh.set_child(refreshContent);
         refresh.connect('clicked', () => { this.feedback.text = ''; this.refresh(true); });
+        this.filterButton = this.button(this.availableOnly ? 'Filter: Available' : 'Filter: All', () => this.toggleFilter());
+        header.add_child(this.filterButton);
         header.add_child(refresh);
         header.add_child(new St.Widget({x_expand: true}));
         header.add_child(add);
@@ -62,6 +65,13 @@ var Panel = class Panel {
         this.list = new St.BoxLayout({vertical: true, style_class: 'pingoose-favorites-list'});
         scroll.add_actor(this.list);
         this.root.add_child(scroll);
+        this.render();
+    }
+    toggleFilter() {
+        this.availableOnly = !this.availableOnly;
+        this.settings.set_boolean('chat-favorites-available-only', this.availableOnly);
+        this.filterButton.label = this.availableOnly ? 'Filter: Available' : 'Filter: All';
+        this.scrollPosition = 0;
         this.render();
     }
     resetInput() {
@@ -276,8 +286,10 @@ var Panel = class Panel {
         const focus = global.stage.get_key_focus();
         if (focus && this.list.contains(focus)) global.stage.set_key_focus(this.scroll);
         this.list.destroy_all_children();
-        if (!this.rows.length) this.list.add_child(new St.Label({text: 'No favorites yet.', style_class: 'pingoose-profile-login'}));
+        const visibleRows = this.rows.filter(row => !this.availableOnly || !!this.seats.get(row.login)?.seat);
+        if (!visibleRows.length) this.list.add_child(new St.Label({text: this.rows.length ? 'No available favorites.' : 'No favorites yet.', style_class: 'pingoose-profile-login'}));
         this.rows.forEach((row, index) => {
+            if (this.availableOnly && !this.seats.get(row.login)?.seat) return;
             const card = new St.BoxLayout({vertical: true, style_class: 'pingoose-profile pingoose-favorite-card'});
             const identity = new St.BoxLayout({style_class: 'pingoose-identity'});
             const avatar = new St.Bin({width: 52, height: 52, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-avatar pingoose-favorite-avatar'});
@@ -299,6 +311,7 @@ var Panel = class Panel {
                 actions.visible = !actions.visible;
                 if (actions.visible && index === this.rows.length - 1) this.revealBottom();
             });
+            options.visible = options.reactive = options.can_focus = !this.availableOnly;
             options.accessible_name = 'Favorite options';
             options.style_class = 'pingoose-note-options';
             options.y_align = Clutter.ActorAlign.CENTER;

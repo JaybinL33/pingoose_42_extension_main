@@ -152,6 +152,21 @@ class Updates(unittest.TestCase):
         self.assertEqual((self.path.parent / 'installed-fixture').read_text(), 'approved')
         self.assertFalse(list(self.path.parent.glob('checkout-*')))
 
+    def test_collects_paginated_commit_titles(self):
+        commits = [{'sha': format(i, '040x'), 'commit': {'message': f'Change {i}\nDetails'}} for i in range(305)]
+        def api(config, route):
+            if route.startswith('commits/'):
+                return {'sha': B, 'commit': {'message': 'Latest'}}
+            if '?' not in route:
+                return {'status': 'ahead', 'commits': commits[:250], 'total_commits': 305}
+            page = int(route.split('page=')[-1])
+            return {'commits': commits[(page-1)*100:page*100]}
+        updater.check(CONFIG, self.state, self.path, 'session1', api)
+        changes = self.state['candidate']['changes']
+        self.assertEqual(len(changes), 305)
+        self.assertEqual(changes[-1]['message'], 'Change 304')
+        self.assertEqual(self.state['installed']['sha'], A)
+
     def test_config_override(self):
         root = self.path.parent
         (root / 'config').mkdir()

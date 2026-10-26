@@ -2,6 +2,7 @@ const {Gtk, Gio, GLib} = imports.gi;
 const Common = imports.misc.extensionUtils.getCurrentExtension().imports.preferences.common;
 function build(settings) {
     const box = new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:18});
+    imports.misc.extensionUtils.getCurrentExtension().imports.preferences.panelShortcut.append(box,settings);
     const theme = new Gtk.ComboBoxText();
     theme.append('dark','Dark'); theme.append('light','Light');
     settings.bind('theme',theme,'active-id',Gio.SettingsBindFlags.DEFAULT);

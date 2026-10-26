@@ -5,7 +5,8 @@ const MessageTray = imports.ui.messageTray;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 
 var Updater = class Updater {
-    constructor(settings) {
+    constructor(settings, installed = null) {
+        this._installed = installed;
         this._settings = settings;
         this._alive = true;
         this.installing = false;
@@ -91,8 +92,10 @@ var Updater = class Updater {
         this._notify('Updating Pingoose', 'Downloading and installing the approved commit…');
         this._run('install', commit, result => {
             this.installing = false;
-            if (result.status === 'installed') this._notify('Pingoose update complete',
-                'Installation finished and temporary files were removed. Restart GNOME Shell or log in again to apply it.');
+            if (result.status === 'installed') {
+                this._installed?.(result.commit);
+                this._notify('Pingoose update complete','Restart GNOME Shell to apply it: press Alt+F2, type r, and press Enter (X11). On Wayland, log out and back in.');
+            }
             else this._notify('Pingoose update failed', result.error || 'Another update is already running.');
         });
     }

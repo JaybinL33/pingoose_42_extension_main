@@ -26,7 +26,10 @@ function readDOM(login, ownProfile = false) {
         // Only accept this alternate layout on the authenticated home page.
         const ownHome = ownProfile && typeof location !== 'undefined' && location.pathname === '/' &&
             Array.from(document.querySelectorAll('button')).some(button => button.textContent.trim().toLowerCase() === login);
-        if (displayedLogin !== login && !ownHome) continue;
+        const profilePage = typeof location !== 'undefined' &&
+            location.pathname.replace(/\/$/,'') === '/users/' + login &&
+            !!heading.closest?.('header, [role="banner"]');
+        if (displayedLogin !== login && !ownHome && !profilePage) continue;
         const name = heading.textContent.trim().slice(0, 100);
         if (!name) continue;
         const region = identity.parentElement;

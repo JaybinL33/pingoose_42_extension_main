@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
   <schema id="org.gnome.shell.extensions.pingoose" path="/org/gnome/shell/extensions/pingoose/">
+    <key name="panel-shortcut" type="as"><default>[]</default><summary>Global shortcut to open Pingoose</summary></key>
     <key name="dismissed-agenda-ids" type="as"><default>[]</default><summary>Agenda cards acknowledged by the user</summary></key>
     <key name="agenda-reset-request" type="s"><default>''</default><summary>Restore dismissed agenda cards</summary></key>
     <key name="reset-request" type="s"><default>''</default><summary>Pending full reset request</summary></key>
@@ -31,6 +32,7 @@
       <summary>Profile menu color theme</summary>
     </key>
     <key name="auto-hide-scrollbars" type="b"><default>true</default><summary>Hide panel scrollbars when scrolling stops</summary></key>
+    <key name="chat-favorites-available-only" type="b"><default>false</default><summary>Show only available favorites</summary></key>
     <key name="chat-favorites" type="s"><default>'[]'</default><summary>Saved Cluster Chat favorite profiles</summary></key>
     <key name="notification-duration" type="i">
       <range min="0" max="120"/>

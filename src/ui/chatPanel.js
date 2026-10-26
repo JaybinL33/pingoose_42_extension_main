@@ -197,6 +197,8 @@ var ChatPanel = class ChatPanel {
         // Share the popup grab so interacting with chat does not close the main menu.
         const bin = indicator.menu._boxPointer.bin;
         const main = indicator.menu.box;
+        // Painted panel gaps must retain pointer events inside the popup.
+        main.reactive = true;
         // Each column keeps its natural height instead of stretching to the tallest panel.
         main.request_mode = Clutter.RequestMode.HEIGHT_FOR_WIDTH;
         main.x_expand = false;
@@ -476,26 +478,7 @@ var ChatPanel = class ChatPanel {
         // Plain text only: peer input must never be parsed as Pango markup.
         const message = wrapLabel(new St.Label({text: entry.text, reactive: true,
             can_focus: true, style_class: 'pingoose-chat-text'}));
-        const text = message.clutter_text;
-        text.reactive = true;
-        text.set_selectable(true);
-        text.set_editable(false);
-        // St.Label does not apply St.Entry's selection CSS to its Clutter.Text.
-        const selectionColors = () => {
-            text.set_selection_color(new Clutter.Color({red: 133, green: 214, blue: 203, alpha: 255}));
-            text.set_selected_text_color(new Clutter.Color({red: 16, green: 35, blue: 32, alpha: 255}));
-        };
-        message.connect('style-changed', selectionColors);
-        selectionColors();
-        text.connect('key-press-event', (_actor, event) => {
-            if ((event.get_state() & Clutter.ModifierType.CONTROL_MASK) &&
-                [Clutter.KEY_c, Clutter.KEY_C].includes(event.get_key_symbol())) {
-                const selection = text.get_selection();
-                if (selection) St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, selection);
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        });
+        Me.imports.ui.selectableText.attach(message);
         bubble.add_child(message);
         bubble.add_child(new St.Label({text: entry.time, x_align: align, style_class: 'pingoose-chat-time'}));
         ui.log.add_child(bubble);

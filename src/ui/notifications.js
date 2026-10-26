@@ -5,9 +5,21 @@ const PopupMenu = imports.ui.popupMenu;
 
 var Controller = class Controller {
     _saveCardState() {
-        if(this._resetting || this._cardArchiveFailed || this._indicator?.loginOnly)return;
+        if(this._resetting || this._cardArchiveFailed)return;
         try {
-            imports.misc.extensionUtils.getCurrentExtension().imports.services.cardStore.write({
+            const store=imports.misc.extensionUtils.getCurrentExtension().imports.services.cardStore;
+            // Desktop update checks also run before Intra sign-in. Preserve the
+            // archived account cards while adding these device-level notices.
+            if(this._indicator?.loginOnly){
+                const updates=this._notifications.filter(row=>row.category==='update');
+                if(!updates.length)return;
+                const old=store.read() || {notifications:[],received:[],tests:[]};
+                const ids=new Set(updates.map(row=>row.id));
+                store.write({...old,notifications:[...updates,...old.notifications.filter(row=>!ids.has(row.id))],
+                    received:[...new Set([...old.received,...ids])]});
+                return;
+            }
+            store.write({
                 notifications:this._notifications,
                 received:[...(this._receivedNotificationIds || [])],
                 tests:(this._evaluations || []).filter(row=>row.devTest),
@@ -128,7 +140,7 @@ var Controller = class Controller {
                 this._renderCards();
             });
             item.add_child(dismiss);
-            card.add_child(new St.Label({text: notification.test ? 'Test Notification' : notification.category === 'agenda' ? '42 · New Agenda Event' : '42 · New Evaluation',
+            card.add_child(new St.Label({text: notification.test ? 'Test Notification' : notification.category === 'update' ? 'A new update was installed' : notification.category === 'agenda' ? '42 · New Agenda Event' : '42 · New Evaluation',
                 style_class: 'pingoose-card-title'}));
             const body = new St.Label({text: notification.body, style_class: 'pingoose-card-body'});
             body.clutter_text.line_wrap = true;

@@ -490,7 +490,7 @@ class Worker {
                         if(!profile && data.profile?.profileLogin===request.login && data.profile.name)profile={name:data.profile.name};
                         if(data.profile?.profileLogin===request.login)avatarURL=data.profile.avatar || null;
                         readAvatar();
-                        if(campus && campus===this.profileCampus && (profile || request.stateOnly) && availabilityKnown && (request.avatarCached || avatar || (!avatarURL && attempts>=5) || attempts>=14)){GLib.source_remove(timer);finish(seat);}
+                        if(campus && campus===this.profileCampus && (profile || request.stateOnly) && (request.add || availabilityKnown) && (request.avatarCached || avatar || (!avatarURL && attempts>=5) || attempts>=14)){GLib.source_remove(timer);finish(seat);}
                     }else if(seat && campus && campus===this.profileCampus){GLib.source_remove(timer);finish(seat);}
                 }catch(_){}
             });

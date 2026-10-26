@@ -33,6 +33,7 @@ class Pingoose {
 
         this._indicator.onCountChanged = () => this._updatePanelLabel();
         Main.panel.addToStatusArea(Me.uuid, this._indicator);
+        this._panelShortcut=new Me.imports.services.panelShortcut.Binding(this._settings,()=>this._indicator.menu.open());
         this._profileClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
             this._indicator?.refreshLogtimeTitle();
             if (this._indicator?.lastProfile) this._indicator.updateProfile(this._indicator.lastProfile);
@@ -77,7 +78,11 @@ class Pingoose {
         this._sessionHook.enable();
         this._startWorker();
         this._requestFullReset();
-        if (!this._resetting) this._updater = new Me.imports.services.updater.Updater(this._settings);
+        if (!this._resetting) this._updater = new Me.imports.services.updater.Updater(this._settings,commit=>{
+            Me.imports.models.updateCards.bodies(commit).forEach((body,index)=>this._message({
+                type:'notification',category:'update',id:`update:${commit.sha}:${index}`,body,
+            }));
+        });
     }
 
     _startWorker() {
@@ -344,13 +349,14 @@ class Pingoose {
             unread: !this._indicator.menu.isOpen, time: GLib.DateTime.new_now_local().format('%H:%M')});
         this._saveCardState?.();
         this._renderCards();
-        if (message.test || this._settings.get_boolean(message.category === 'agenda' ? 'notify-agenda' : 'notify-evaluations')) {
+        if (message.category !== 'update' && (message.test || this._settings.get_boolean(message.category === 'agenda' ? 'notify-agenda' : 'notify-evaluations'))) {
             this._showBanner(message);
             this._flashScreen();
         }
     }
 
     disable() {
+        this._panelShortcut?.destroy();this._panelShortcut=null;
         this._autoHideScrollbars?.destroy();
         this._autoHideScrollbars = null;
         this._bannerDuration?.destroy();

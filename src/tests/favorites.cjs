@@ -136,3 +136,13 @@ assert.equal(readDOM('friend'),null);
 assert.equal(readDOM('friend',true).campus,'paris');
 domContext.location.pathname='/users/someoneelse';assert.equal(readDOM('friend',true),null);
 console.log('PASS: authenticated home title selector supports campus lookup without accepting other user pages');
+
+// Title-only profiles must identify by the exact user route and profile header.
+for (const login of ['jaehylee', 'seunkang']) {
+ domContext.location.pathname='/users/'+login;
+ assert.equal(readDOM(login).profileLogin,login);
+ assert.equal(readDOM('unrelated'),null);
+}
+domContext.location.pathname='/users/seunkang/';
+assert.equal(readDOM('seunkang').campus,'paris');
+console.log('PASS: title-only profile routes resolve without depending on online or frozen state');

@@ -112,7 +112,16 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         overviewItem.remove_all_children();
         const overview = new St.BoxLayout({style_class: 'pingoose-overview', x_expand: true});
         const projectsColumn = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column'});
-        const myProjects=new St.Button({label:'My Projects',can_focus:true,x_align:Clutter.ActorAlign.START,style_class:'pingoose-heading'});
+        const myProjects=this.myProjectsButton=new St.Button({label:'My Projects',button_mask:St.ButtonMask.ONE,can_focus:true,x_align:Clutter.ActorAlign.START,style_class:'pingoose-project-heading'});
+        this.projectButtons=new Map();
+        this.syncProjectButtons=slug=>{
+            this.activeProjectSlug=slug;
+            for(const [key,button] of this.projectButtons){
+                if(key===slug)button.add_style_class_name('pingoose-project-selected');
+                else button.remove_style_class_name('pingoose-project-selected');
+            }
+            myProjects.style_class='pingoose-project-heading'+(slug==='__my_projects__'?' pingoose-toggle-active':'');
+        };
         myProjects.connect('clicked',()=>{if(this.lastProfile?.login)this.onProjectOpen?.({slug:'__my_projects__',name:'My Projects',login:this.lastProfile.login});});
         projectsColumn.add_child(myProjects);
         this.projects = new PopupMenu.PopupMenuSection();
@@ -356,6 +365,7 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         if (key === this.projectsKey) return;
         this.projectsKey = key;
         this.projects.removeAll();
+        this.projectButtons.clear();
         if (!projects.length) {
             this.projects.addMenuItem(new PopupMenu.PopupMenuItem('No active projects.', {reactive: false}));
             return;
@@ -363,8 +373,13 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         for (const project of projects) {
             const item = releasePointerHighlight(new PopupMenu.PopupMenuItem(project.name.slice(0, 80)));
             item.add_style_class_name('pingoose-project-item');
+            this.projectButtons.set(project.slug,item);
+            if(project.slug===this.activeProjectSlug)item.add_style_class_name('pingoose-project-selected');
             item.label.clutter_text.ellipsize = Pango.EllipsizeMode.END;
-            item.connect('activate', () => {
+            item.connect('button-press-event',(_actor,event)=>event.get_button()===1?Clutter.EVENT_PROPAGATE:Clutter.EVENT_STOP);
+            item.connect('button-release-event',(_actor,event)=>event.get_button()===1?Clutter.EVENT_PROPAGATE:Clutter.EVENT_STOP);
+            item.connect('activate', (_item,event) => {
+                if(event?.type()===Clutter.EventType.BUTTON_RELEASE && event.get_button()!==1)return;
                 this.onProjectOpen?.({slug: project.slug, name: project.name, login: data.login});
             });
             this.projects.addMenuItem(item);

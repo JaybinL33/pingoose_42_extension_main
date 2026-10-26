@@ -147,6 +147,7 @@ var ProjectPanel=class ProjectPanel {
         });
     }
     fitWrappedLabel(label) {
+        Me.imports.ui.selectableText.attach(label);
         label.request_mode=Clutter.RequestMode.HEIGHT_FOR_WIDTH;
         label.y_expand=false;
         let pending=0;
@@ -205,9 +206,9 @@ var ProjectPanel=class ProjectPanel {
         }
         this.kind=imports.misc.extensionUtils.getSettings().get_string('project-default-tab');
         this.tabs.set_child_at_index(this.kind==='note'?this.noteTab:this.todoTab,0);
-        this.project=project;this.visitButton.visible=project.slug!=='__my_projects__';this.expanded=true;this.indicator.bringPanelNearMain(this.root);this.title.text=project.name;this.editing=this.drafts.get(this.key())||null;this.renderList();this.renderEditor();this.sync();}
+        this.project=project;this.visitButton.visible=project.slug!=='__my_projects__';this.expanded=true;this.indicator.bringPanelNearMain(this.root);this.title.text=project.slug==='__my_projects__'?'My Notes':project.name;this.editing=this.drafts.get(this.key())||null;this.renderList();this.renderEditor();this.sync();}
     switchTab(kind){this.confirmation.hide();this.capture();this.kind=kind;this.editing=this.drafts.get(this.key())||null;this.renderList();this.renderEditor();}
-    sync(){this.root.visible=!!this.project && this.expanded && !this.indicator.loginOnly;this.indicator.syncPanelLayout?.();}
+    sync(){this.root.visible=!!this.project && this.expanded && !this.indicator.loginOnly;this.indicator.syncProjectButtons?.(this.root.visible?this.project?.slug:null);this.indicator.syncPanelLayout?.();}
     reset(){this.confirmation.hide();this.drafts.clear();this.project=null;this.editing=null;this.expanded=false;this.name.text='';this.body.text='';this.list.destroy_all_children();this.renderKey=null;this.sync();}
     renderEditor(){
         this.editor.visible=!!this.editing;this.add.visible=!this.editing;

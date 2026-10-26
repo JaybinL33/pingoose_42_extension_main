@@ -333,3 +333,26 @@
 .pingoose-todo-check { color: #85d6cb; }
 .pingoose-light .pingoose-todo-check { color: #16796b; }
 .pingoose-editor-lines { color: #9ca9b4; }
+
+.pingoose-project-heading { font-weight: 800; font-size: 1.12em; border-radius: 7px; padding: 6px 8px; }
+.pingoose-project-heading:hover { background-color: rgba(127,127,127,0.16); }
+.pingoose-project-heading.pingoose-toggle-active { background-color: rgba(133,214,203,0.20); }
+
+.pingoose-project-heading { color: #ffffff; }
+.pingoose-light .pingoose-project-heading { color: #111820; }
+.pingoose-light .pingoose-project-heading.pingoose-toggle-active { background-color: rgba(22,121,107,0.20); }
+
+.pingoose-logtime-column > .pingoose-heading { padding: 6px 8px; }
+
+/* Use the same active palette as the other panel buttons. */
+.pingoose-project-item.pingoose-project-selected {
+    background-color: rgba(133,214,203,0.25);
+    border-radius: 7px;
+    color: #ffffff;
+}
+.pingoose-project-item.pingoose-project-selected:hover,
+.pingoose-project-item.pingoose-project-selected:focus { background-color: rgba(133,214,203,0.36); }
+.pingoose-light .pingoose-project-item.pingoose-project-selected { background-color: rgba(22,121,107,0.20); }
+.pingoose-light .pingoose-project-item.pingoose-project-selected:hover,
+.pingoose-light .pingoose-project-item.pingoose-project-selected:focus { background-color: rgba(22,121,107,0.30); }
+.pingoose-project-item.pingoose-project-selected StLabel { color: #ffffff; }

@@ -119,12 +119,28 @@ def check(config, state, path, login, api=github, force=False, installed=None):
         state.pop('installed', None)
     state['source'] = dict(config)
     state['candidate'] = None
+    changes = [commit]
     if baseline is None:
         state['candidate'] = commit
     elif sha != baseline:
         comparison = api(config, f'compare/{baseline}...{sha}')
         if comparison.get('status') in ('ahead', 'diverged'):
             state['candidate'] = commit
+            commits = comparison.get('commits', [])
+            if comparison.get('total_commits', len(commits)) > len(commits):
+                commits = []
+                page = 1
+                while True:
+                    batch = api(config, f'compare/{baseline}...{sha}?per_page=100&page={page}').get('commits', [])
+                    commits.extend(batch)
+                    if len(batch) < 100:
+                        break
+                    page += 1
+            changes = [{'sha': item.get('sha', ''),
+                        'message': item.get('commit', {}).get('message', '').split('\n')[0][:500]}
+                       for item in commits] or [commit]
+    if state['candidate']:
+        state['candidate'] = {**commit, 'changes': changes}
     save_json(path, state)
     if state['candidate']:
         return {'status': 'available', 'commit': commit, **config}
