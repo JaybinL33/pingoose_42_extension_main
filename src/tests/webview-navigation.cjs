@@ -26,7 +26,7 @@ assert.deepEqual(calls,['back','forward','reload']);
 assert.equal(context.create(view).children.length,3);
 const source=fs.readFileSync('src/worker/webview.js','utf8');
 assert.match(source,/this.loginWindow = true;\s*this.navigation.hide\(\)/);
-assert.match(source,/command === 'show'.*this.navigation.show\(\)/);
+assert.match(source,/command === 'show'[\s\S]*?this.command\('service:open:'[\s\S]*?https:\/\/profile\.intra\.42\.fr\//);
 console.log('PASS: Back / Forward / Refresh order, history state, reload action; login navigation hidden');
 
 const key=bar._refreshKeys['key-pressed'];

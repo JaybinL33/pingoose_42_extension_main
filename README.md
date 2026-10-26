@@ -105,10 +105,10 @@ Create Slot 카드에서 시작–종료 날짜·시·분을 ▲▼로 조절하
 
 ## 프로젝트 메모와 TODO
 
-My Projects의 프로젝트를 클릭하면 **TODO List / Note** 패널이 열립니다.
+My Projects의 프로젝트를 클릭하면 **TODO List / Note** 패널이 열립니다. **My Projects 제목**을 누르면 특정 과제에 속하지 않는 공용 메모 패널이 열리며, 이 패널에는 Visit Project Page 버튼이 없습니다.
 
 - Add Note로 제목과 내용을 입력하고 Save로 저장합니다.
-- TODO는 한 줄에 할 일 하나를 입력하고 저장 후 체크할 수 있습니다.
+- TODO는 직접 줄바꿈한 줄마다 별도 항목으로 저장하며 각각 체크·수정·삭제할 수 있습니다. 긴 한 줄의 자동 줄바꿈은 하나의 항목으로 유지됩니다.
 - Edit로 수정하고 Visit Project Page로 프로젝트 웹페이지를 엽니다.
 - 저장된 항목은 프로젝트·로그인 계정별로 구분하며 생성일 오름차순으로 표시합니다.
 - 저장하지 않은 초안은 실행 중인 확장의 메모리에만 있으므로 로그아웃·세션 재시작 전에 Save가 필요합니다.
@@ -175,7 +175,7 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 | --- | --- |
 | Open project page directly | 꺼짐. 켜면 메모 패널 대신 프로젝트 웹뷰 열기 |
 | Default project tab | TODO List. Note로 변경 가능 |
-| Refresh Notes | 저장된 메모 목록 다시 읽기 |
+| Refresh Notes | My Projects와 각 프로젝트별로 묶인 개별 할 일·노트 목록 다시 읽기 |
 | Delete / Delete All | 확인 후 개별 또는 전체 메모·TODO 삭제 |
 
 ### 42 Services

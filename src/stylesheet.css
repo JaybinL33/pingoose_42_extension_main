@@ -219,8 +219,8 @@
 .pingoose-project-note StLabel { max-width: 290px; }
 .pingoose-note-editor-scroll { height: 130px; max-height: 130px; }
 .pingoose-note-editor-scroll StScrollBar { min-width: 8px; }
-.pingoose-note-editor { width: 280px; min-height: 110px; }
-.pingoose-note-editor ClutterText { width: 280px; }
+.pingoose-note-editor { min-height: 38px; }
+
 
 .pingoose-todo-scroll { width: 236px; max-width: 236px; }
 .pingoose-todo-scroll StScrollBar { min-height: 8px; margin-top: 6px; }
@@ -327,3 +327,9 @@
 
 .pingoose-favorite-status-row .pingoose-profile-level,
 .pingoose-favorite-status-row .pingoose-favorite-unavailable { font-size: 0.95em; }
+
+.pingoose-todo-text { width: 222px; padding-top: 2px; padding-bottom: 2px; }
+.pingoose-todo-card { padding-top: 12px; padding-bottom: 12px; }
+.pingoose-todo-check { color: #85d6cb; }
+.pingoose-light .pingoose-todo-check { color: #16796b; }
+.pingoose-editor-lines { color: #9ca9b4; }

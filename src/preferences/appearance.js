@@ -11,9 +11,7 @@ function build(settings) {
     Common.row(box, 'Auto-hide scrollbars', scrollbars);
     box.append(new Gtk.Label({label: 'Show or hide cards and use the arrows to change their order.\nMy Projects and Logtime share one row. Hidden cards keep their position. Use Apply to save the new order.', xalign: 0, wrap: true}));
     const list = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 10});
-    const scroll = new Gtk.ScrolledWindow({vexpand: true, min_content_height: 360,
-        hscrollbar_policy: Gtk.PolicyType.NEVER});
-    scroll.set_child(list); box.append(scroll);
+    box.append(list);
     const rows = new Map();
     const available = Order.sections.filter(section=>section[0]!=='chat' || imports.misc.extensionUtils.getCurrentExtension().imports.models.featureFlags.enabled(settings,'hidden-cluster-chat'));
     let draft = Order.read(settings);
@@ -51,7 +49,7 @@ function build(settings) {
             const order = draft.filter(value=>rows.has(value)), index = order.indexOf(key), target = index + delta;
             if (target < 0 || target >= order.length) return;
             [order[index], order[target]] = [order[target], order[index]];
-            draft = Order.normalize(order); Common.preserveListScroll(scroll, list, refresh);
+            draft = Order.normalize(order); Common.preserveListScroll(list, list, refresh);
         };
         up.connect('clicked', () => move(-1)); down.connect('clicked', () => move(1));
         row.append(up); row.append(down); list.append(row);

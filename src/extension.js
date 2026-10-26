@@ -27,7 +27,7 @@ class Pingoose {
         this._autoHideScrollbars = new Me.imports.ui.autoHideScrollbars.Controller(this._indicator.menu.actor, this._settings);
         this._indicator.onLogin = () => this._send('login');
         this._indicator.onProjectOpen = project => {
-            if (this._settings.get_boolean('project-open-direct')) this._visitProject(project);
+            if (project.slug!=='__my_projects__' && this._settings.get_boolean('project-open-direct')) this._visitProject(project);
             else this._projectPanel.open(project);
         };
 
@@ -233,6 +233,7 @@ class Pingoose {
             }
             return;
         }
+        if(message.type==='favorite-clusters'){this._chatPanel?._favorites?.completeClusters(message);return;}
         if(message.type==='chat-lookup'){this._chatPanel?.completeLookup(message);return;}
         if (message.type === 'slots') {
             if(this._refreshPending){

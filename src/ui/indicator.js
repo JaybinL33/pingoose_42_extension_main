@@ -112,7 +112,9 @@ var Indicator = GObject.registerClass(class PingooseIndicator extends PanelMenu.
         overviewItem.remove_all_children();
         const overview = new St.BoxLayout({style_class: 'pingoose-overview', x_expand: true});
         const projectsColumn = new St.BoxLayout({vertical: true, style_class: 'pingoose-overview-column'});
-        projectsColumn.add_child(new St.Label({text: 'My Projects', style_class: 'pingoose-heading'}));
+        const myProjects=new St.Button({label:'My Projects',can_focus:true,x_align:Clutter.ActorAlign.START,style_class:'pingoose-heading'});
+        myProjects.connect('clicked',()=>{if(this.lastProfile?.login)this.onProjectOpen?.({slug:'__my_projects__',name:'My Projects',login:this.lastProfile.login});});
+        projectsColumn.add_child(myProjects);
         this.projects = new PopupMenu.PopupMenuSection();
         const projectsLoading=new PopupMenu.PopupBaseMenuItem({reactive:false,can_focus:false});
         projectsLoading.add_child(Me.imports.ui.spinner.create(20));this.projects.addMenuItem(projectsLoading);

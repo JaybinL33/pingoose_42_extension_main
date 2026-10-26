@@ -1,7 +1,16 @@
 const {Gtk} = imports.gi;
+// One native GTK scroll viewport per tab: wheel and touchpad behavior should
+// not depend on whether the pointer is over a header, form, or saved list.
+function scrollPage(content) {
+    const scroll = new Gtk.ScrolledWindow({hexpand:true,vexpand:true,
+        hscrollbar_policy:Gtk.PolicyType.NEVER,vscrollbar_policy:Gtk.PolicyType.AUTOMATIC,
+        propagate_natural_height:false,overlay_scrolling:false,min_content_height:0});
+    scroll.set_child(content);
+    return scroll;
+}
 function row(parent, name, control) {
     const box = new Gtk.Box({spacing:24});
-    box.append(new Gtk.Label({label:name, xalign:0, hexpand:true}));
+    box.append(new Gtk.Label({label:name, xalign:0, hexpand:true, wrap:true}));
     box.append(control); parent.append(box);
 }
 function confirm(parent, title, detail, accept, action) {
@@ -22,6 +31,9 @@ function confirm(parent, title, detail, accept, action) {
 // Move focus to the viewport before removal, then restore the user's position
 // after allocation. Only list mutations use this; normal keyboard navigation stays intact.
 function preserveListScroll(scroll, list, update) {
+    // Page lists no longer own nested viewports. Resolve their tab viewport.
+    while(scroll && typeof scroll.get_vadjustment !== 'function')scroll=scroll.get_parent();
+    if(!scroll){update();return;}
     if (!scroll.get_mapped()) { update(); return; }
     const adjustment = scroll.get_vadjustment();
     const previous = scroll._pingooseScrollRestore;

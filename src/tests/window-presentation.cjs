@@ -12,9 +12,13 @@ assert.equal(sender._commands[2],'slots:list');
 const source=fs.readFileSync('src/worker/webview.js','utf8');
 // Extract the method through its closing brace, before the next method.
 const end=source.indexOf('\n    }',source.indexOf("else if (command === 'hide')"))+6;
-const Worker=vm.runInNewContext('(class {'+source.slice(source.indexOf('    command(command,'),end)+'})');
-let shown=0,presented=[];
-const worker=new Worker();worker.navigation={show(){}};worker.window={show_all(){shown++;},present_with_time:t=>presented.push(t)};
+let shown=0,presented=[],urls=[];
+const Worker=vm.runInNewContext('(class {'+source.slice(source.indexOf('    command(command,'),end)+'})',{
+ imports:{worker:{serviceBrowser:{open(_context,_name,url,_project,time){shown++;presented.push(time);urls.push(url);return {connect(){}};}}}},
+ status:state=>{throw Error(state);},
+});
+const worker=new Worker();
 worker.command(sender._commands[0]);assert.equal(shown,1);assert.deepEqual(presented,[123456]);
+assert.equal(urls[0],'https://profile.intra.42.fr/');
 worker.command('present:4294967296:show');assert.equal(shown,1);
-console.log('PASS: user timestamp survives worker queue and controls window presentation; background commands unchanged');
+console.log('PASS: preferred-profile navigation keeps timestamp and lets Intra select its version');

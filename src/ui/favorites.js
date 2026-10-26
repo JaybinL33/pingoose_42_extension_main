@@ -28,7 +28,7 @@ var Panel = class Panel {
         refreshContent.add_child(this.refreshIcon);
         refreshContent.add_child(this.refreshSpinner);
         refresh.set_child(refreshContent);
-        refresh.connect('clicked', () => { this.feedback.text = ''; this.refresh(); });
+        refresh.connect('clicked', () => { this.feedback.text = ''; this.refresh(true); });
         header.add_child(refresh);
         header.add_child(new St.Widget({x_expand: true}));
         header.add_child(add);
@@ -57,7 +57,7 @@ var Panel = class Panel {
         this.feedback.connect('notify::text', () => { this.feedback.visible = !!this.feedback.text; });
         this.entry.clutter_text.connect('text-changed', () => { this.feedback.text = ''; });
         this.root.add_child(this.feedback);
-        const scroll = this.scroll = new St.ScrollView({y_expand: true, overlay_scrollbars: false, style_class: 'pingoose-favorites-scroll'});
+        const scroll = this.scroll = new St.ScrollView({can_focus: true, y_expand: true, overlay_scrollbars: false, style_class: 'pingoose-favorites-scroll'});
         scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
         this.list = new St.BoxLayout({vertical: true, style_class: 'pingoose-favorites-list'});
         scroll.add_actor(this.list);
@@ -84,6 +84,7 @@ var Panel = class Panel {
     sync() {
         const allowed = this.allowed();
         if (!allowed) {
+            this.clearClusterRequest();
             this.expanded = false; this.queue = []; this.pending = null;
             this.connectAfter = null; this.adding = null;
             this.setAddBusy(false);
@@ -106,7 +107,11 @@ var Panel = class Panel {
         try { Me.imports.services.favoriteCache.write(this.seats); }
         catch (error) { logError(error, 'Could not save favorite seat cache'); }
     }
-    save() { this.settings.set_string('chat-favorites', JSON.stringify(this.rows)); }
+    save() {
+        const adjustment = this.scroll?.get_vscroll_bar().get_adjustment();
+        if (adjustment && this.scrollPosition == null) this.scrollPosition = adjustment.value;
+        this.settings.set_string('chat-favorites', JSON.stringify(this.rows));
+    }
     add() {
         if (!this.allowed() || this.adding) return;
         const login = this.entry.text.trim().toLowerCase().replace(/^@/, '');
@@ -120,14 +125,41 @@ var Panel = class Panel {
         this.queue.unshift({login, add: true});
         this.next();
     }
-    refresh() {
-        if (!this.allowed() || this.pending || this.queue.length) return;
-        this.queue = this.rows.map(row => ({login: row.login}));
-        this.next();
+    refresh(force = false) {
+        if (!this.allowed() || this.clusterRequest || !this.rows.length) return;
+        if (!force && Date.now() - (this.clusterUpdatedAt || 0) < 30000) return;
+        this.clusterRequest = String(GLib.get_monotonic_time());
+        this.clusterTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 25, () => {
+            this.clusterTimeout = 0;
+            this.completeClusters({request: this.clusterRequest, error: 'Could not refresh seats. Please try again.'});
+            return GLib.SOURCE_REMOVE;
+        });
+        this.chat._send('favorites:clusters:' + JSON.stringify({request: this.clusterRequest}));
+        this.syncRefresh();
+    }
+    completeClusters(message) {
+        if (!this.clusterRequest || message.request !== this.clusterRequest) return;
+        this.clusterRequest = null;
+        if (this.clusterTimeout) GLib.source_remove(this.clusterTimeout);
+        this.clusterTimeout = 0;
+        if (this.allowed()) {
+            if (message.error) this.feedback.text = message.error;
+            else {
+                this.clusterUpdatedAt = Date.now();
+                for (const row of this.rows) {
+                    const seat = message.seats?.[row.login];
+                    // Meta scopes the complete snapshot to the signed-in user’s campus.
+                    this.seats.set(row.login, {seat: seat || null, campus: message.campus, at: Date.now()});
+                }
+                this.saveSeats();
+                this.render();
+            }
+        }
+        this.syncRefresh();
     }
     syncRefresh() {
         if (!this.refreshButton) return;
-        const busy = !!this.pending || this.queue.length > 0;
+        const busy = !!this.clusterRequest || !!this.pending || this.queue.length > 0;
         this.refreshIcon.visible = !busy;
         this.refreshSpinner.visible = busy;
         this.refreshButton.reactive = this.refreshButton.can_focus = !busy;
@@ -179,7 +211,7 @@ var Panel = class Panel {
             else if (item.add) this.rows.push(row);
             }
             if (message.seatKnown !== false) {
-                this.seats.set(item.login, {seat: message.seat || null, at: Date.now()});
+                this.seats.set(item.login, {seat: message.seat || null, campus: message.campus, at: Date.now()});
                 this.saveSeats();
             }
             if (message.avatar && message.avatar.length <= 2700000 && this.rows.some(value => value.login === item.login)) {
@@ -232,13 +264,17 @@ var Panel = class Panel {
         if (this.scrollRestore) Meta.later_remove(this.scrollRestore);
         if (adjustment) {
             this.scrollPosition = position;
+            let frames = 0;
             this.scrollRestore = Meta.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
+                if (++frames < 2) return GLib.SOURCE_CONTINUE;
                 this.scrollRestore = 0;
                 adjustment.value = Math.max(adjustment.lower, Math.min(position, adjustment.upper - adjustment.page_size));
                 this.scrollPosition = null;
                 return GLib.SOURCE_REMOVE;
             });
         }
+        const focus = global.stage.get_key_focus();
+        if (focus && this.list.contains(focus)) global.stage.set_key_focus(this.scroll);
         this.list.destroy_all_children();
         if (!this.rows.length) this.list.add_child(new St.Label({text: 'No favorites yet.', style_class: 'pingoose-profile-login'}));
         this.rows.forEach((row, index) => {
@@ -259,7 +295,10 @@ var Panel = class Panel {
             names.add_child(top);
             identity.add_child(names);
             const actions = new St.BoxLayout({visible: false, style_class: 'pingoose-chat-input-row'});
-            const options = this.button('⋮', () => { actions.visible = !actions.visible; });
+            const options = this.button('⋮', () => {
+                actions.visible = !actions.visible;
+                if (actions.visible && index === this.rows.length - 1) this.revealBottom();
+            });
             options.accessible_name = 'Favorite options';
             options.style_class = 'pingoose-note-options';
             options.y_align = Clutter.ActorAlign.CENTER;
@@ -305,6 +344,18 @@ var Panel = class Panel {
             this.list.add_child(card);
         });
     }
+    revealBottom() {
+        if (this.scrollRestore) Meta.later_remove(this.scrollRestore);
+        this.scrollPosition = null;
+        let frames = 0;
+        this.scrollRestore = Meta.later_add(Meta.LaterType.BEFORE_REDRAW, () => {
+            if (++frames < 2) return GLib.SOURCE_CONTINUE;
+            this.scrollRestore = 0;
+            const adjustment = this.scroll.get_vscroll_bar().get_adjustment();
+            adjustment.value = Math.max(adjustment.lower, adjustment.upper - adjustment.page_size);
+            return GLib.SOURCE_REMOVE;
+        });
+    }
     confirmRemove(actions, login) {
         actions.destroy_all_children();
         actions.add_child(new St.Label({text: 'Remove favorite?', x_expand: true, y_align: Clutter.ActorAlign.CENTER}));
@@ -324,7 +375,12 @@ var Panel = class Panel {
         this.saveSeats();
         this.save(); this.render();
     }
+    clearClusterRequest() {
+        if (this.clusterTimeout) GLib.source_remove(this.clusterTimeout);
+        this.clusterTimeout = 0; this.clusterRequest = null; this.clusterUpdatedAt = 0;
+    }
     reset() {
+        this.clearClusterRequest();
         this.connectingLogin = null;
         this.expanded = false; this.pending = null; this.queue = []; this.seats.clear();
         this.saveSeats();
@@ -337,6 +393,7 @@ var Panel = class Panel {
         this.root.hide(); this.render();
     }
     destroy() {
+        this.clearClusterRequest();
         if (this.scrollRestore) Meta.later_remove(this.scrollRestore);
         if (this.retry) GLib.source_remove(this.retry);
         if (this.timeout) GLib.source_remove(this.timeout);

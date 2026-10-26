@@ -6,7 +6,7 @@ const gi = {
  GLib:{source_remove(){},get_monotonic_time:()=>123,get_user_state_dir:()=>'/state',build_filenamev:a=>a.join('/'),mkdir_with_parents(){},base64_decode:()=>[],timeout_add_seconds:()=>1},
 };
 const extension={imports:{services:{favoriteCache:{write(){},read:()=>[]}},models:{featureFlags:{enabled:()=>enabled}}}};
-const context={imports:{gi,misc:{extensionUtils:{getCurrentExtension:()=>extension}}}};
+const context={global:{stage:{get_key_focus:()=>null}},imports:{gi,misc:{extensionUtils:{getCurrentExtension:()=>extension}}}};
 const Panel=vm.runInNewContext(fs.readFileSync('src/ui/favorites.js','utf8')+'\nPanel',context);
 const panel=Object.create(Panel.prototype);
 Object.assign(panel,{settings:{set_string:(_key,value)=>saved=value},chat:{_indicator:{loginOnly:false},_chatUi:{peerEntry:{}},_setConnectBusy(){},_send:command=>sent.push(command)},rows:[],seats:new Map(),removed:new Set(),queue:[],addButton:{},addLabel:{},addSpinner:{},entry:{},entryRow:{hide(){}},feedback:{},render(){},next(){}});
@@ -72,8 +72,8 @@ gi.St.Label=class {constructor(props){Object.assign(this,props);}};
 const adjustment={value:180,lower:0,upper:600,page_size:200};
 const scrollPanel=Object.create(Panel.prototype);
 Object.assign(scrollPanel,{rows:[],scroll:{get_vscroll_bar:()=>({get_adjustment:()=>adjustment})},list:{destroy_all_children(){adjustment.value=0;},add_child(){}}});
-scrollPanel.render();scrollPanel.render();restore();assert.equal(adjustment.value,180);
-adjustment.upper=300;scrollPanel.render();restore();assert.equal(adjustment.value,100);
+scrollPanel.render();scrollPanel.render();restore();restore();assert.equal(adjustment.value,180);
+adjustment.upper=300;scrollPanel.render();restore();restore();assert.equal(adjustment.value,100);
 panel.connectingLogin='friend';panel.finishConnect();assert.equal(panel.connectingLogin,null);
 console.log('PASS: repeated card rebuilds preserve scroll, deletion clamps to remaining range, connection completion clears spinner state');
 
@@ -99,3 +99,40 @@ assert.equal(panel.rows.find(row=>row.login==='offline').name,oldName);
 assert.equal(panel.seats.get('offline').seat,'c2r3s4');
 assert.equal(panel.queue.length,0);
 console.log('PASS: availability-only refresh preserves saved identity and skips photo work');
+
+// Refresh uses one snapshot regardless of friend count, preserving stale data on errors.
+panel.rows=[{login:'friend',name:'Friend'},{login:'offline',name:'Offline'}];
+panel.seats=new Map([['friend',{seat:'c1r1s1',at:1}]]);
+panel.clusterRequest=null;panel.clusterUpdatedAt=0;panel.feedback={text:''};
+panel.render=()=>{};sent=[];
+panel.refresh(true);
+assert.equal(sent.length,1);assert.ok(sent[0].startsWith('favorites:clusters:'));
+panel.refresh(true);assert.equal(sent.length,1);
+panel.completeClusters({request:'wrong',seats:{}});assert.ok(panel.clusterRequest);
+panel.completeClusters({request:panel.clusterRequest,error:'Network failure'});
+assert.equal(panel.seats.get('friend').seat,'c1r1s1');
+panel.refresh(true);
+panel.completeClusters({request:panel.clusterRequest,campus:'1',seats:{friend:'c2r2s2'}});
+assert.equal(panel.seats.get('friend').seat,'c2r2s2');
+assert.equal(panel.seats.get('offline').seat,null);
+const requests=sent.length;panel.refresh();assert.equal(sent.length,requests);
+console.log('PASS: bulk refresh deduplicates, caches, handles offline and preserves seats on failure');
+
+let campusName='Paris';
+domContext.document.querySelectorAll=()=>[{textContent:'Friend',closest:()=>({querySelectorAll:()=>[
+ {textContent:campusName,querySelector:()=>({})}
+]}),parentElement:{querySelector:()=>({textContent:'friend'}),parentElement:{querySelectorAll:()=>[]}}}];
+assert.equal(readDOM('friend').campus,'paris');
+campusName='Gyeongsan';assert.equal(readDOM('friend').campus,'gyeongsan');
+assert.equal(readDOM('someoneelse'),null);
+console.log('PASS: campus comes from the requested profile, without a fixed campus name');
+
+// Own profile replaces the login paragraph with a title selector.
+domContext.location={pathname:'/'};
+domContext.document.querySelectorAll=selector=>selector==='button'?[{textContent:'friend'}]:[{textContent:'Friend',closest:()=>({querySelectorAll:()=>[
+ {textContent:'Paris',querySelector:()=>({})}
+]}),parentElement:{querySelector:()=>({textContent:'Summer Reporter📝'}),parentElement:{querySelectorAll:()=>[]}}}];
+assert.equal(readDOM('friend'),null);
+assert.equal(readDOM('friend',true).campus,'paris');
+domContext.location.pathname='/users/someoneelse';assert.equal(readDOM('friend',true),null);
+console.log('PASS: authenticated home title selector supports campus lookup without accepting other user pages');

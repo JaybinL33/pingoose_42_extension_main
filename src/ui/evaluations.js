@@ -92,7 +92,7 @@ var Controller = class Controller {
                     this._optionsManager.addMenu(menu);
                     menu.addAction('Visit Profile Page',()=>{
                         this._indicator.menu.close();
-                        this._send('service:open:'+JSON.stringify({name:login,url:'https://profile-v3.intra.42.fr/users/'+encodeURIComponent(login)}));
+                        this._send('service:open:'+JSON.stringify({name:login,url:'https://profile.intra.42.fr/users/'+encodeURIComponent(login)}));
                     });
                     const parentSignal=this._indicator.menu.connect('open-state-changed',(_menu,open)=>{if(!open)menu.close();});
                     profileButton.connect('destroy',()=>{this._indicator.menu.disconnect(parentSignal);this._optionsManager?.removeMenu(menu);menu.destroy();});

@@ -93,6 +93,7 @@ var ChatPanel = class ChatPanel {
         this._lookup=null;
         const ui=this._chatUi;
         if(this._indicator.loginOnly || !Flags.enabled(this._settings,'hidden-cluster-chat')){this._setConnectBusy(false);return;}
+        if (message.error) { this._connectionError(message.error); return; }
         if (!Chat.SEAT.test(message.seat || '')) {
             this._connectionError('Could not find this user’s seat. Check the Intra ID and whether they are logged in to a cluster.');
             return;

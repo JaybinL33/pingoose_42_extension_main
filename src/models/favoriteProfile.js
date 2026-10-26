@@ -16,13 +16,17 @@ if (typeof module !== 'undefined') module.exports = {fromResponse};
 
 // Intra v3 renders the profile portrait as a CSS background; the navbar's
 // <img> belongs to the signed-in user and must not identify this profile.
-function readDOM(login) {
+function readDOM(login, ownProfile = false) {
     for (const heading of document.querySelectorAll('h2')) {
         const identity = heading.parentElement;
         // Optional Intra titles precede the login (e.g. ‘📟코딩선생 jungblee’).
         const displayedLogin = identity?.querySelector('p')?.textContent.trim().toLowerCase()
             .match(/(?:^|\s)@?([a-z0-9_-]+)$/)?.[1];
-        if (displayedLogin !== login) continue;
+        // The account owner sees a title selector instead of a login below h2.
+        // Only accept this alternate layout on the authenticated home page.
+        const ownHome = ownProfile && typeof location !== 'undefined' && location.pathname === '/' &&
+            Array.from(document.querySelectorAll('button')).some(button => button.textContent.trim().toLowerCase() === login);
+        if (displayedLogin !== login && !ownHome) continue;
         const name = heading.textContent.trim().slice(0, 100);
         if (!name) continue;
         const region = identity.parentElement;
@@ -32,7 +36,12 @@ function readDOM(login) {
                 element.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1];
             if (/^https:\/\/cdn\.intra\.42\.fr\/users\//.test(url || '')) { avatar = url; break; }
         }
-        return {profileLogin: login, name, avatar};
+        const banner = heading.closest?.('header, [role="banner"]');
+        // The profile campus field uses the map-pin icon, unlike email/cursus/date.
+        const campusButton = banner && Array.from(banner.querySelectorAll('button')).find(button =>
+            button.querySelector('svg circle[cx="12"][cy="10"][r="3"]'));
+        const campus = campusButton?.textContent.trim().toLowerCase() || null;
+        return {profileLogin: login, name, avatar, campus};
     }
     return null;
 }

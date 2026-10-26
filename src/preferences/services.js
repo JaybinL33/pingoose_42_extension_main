@@ -18,10 +18,9 @@ function build(settings) {
     const reset = new Gtk.Button({label:'Restore Defaults'});
     actions.append(add);actions.append(reset);box.append(actions);
     const error = new Gtk.Label({label:'',xalign:0,wrap:true});box.append(error);
-    const scroll=new Gtk.ScrolledWindow({vexpand:true,min_content_height:200});
-    const list=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});scroll.set_child(list);box.append(scroll);
+    const list=new Gtk.Box({orientation:Gtk.Orientation.VERTICAL,spacing:12});box.append(list);
     const save = sites => settings.set_string('service-sites',JSON.stringify(sites));
-    const render = () => Common.preserveListScroll(scroll, list, () => {
+    const render = () => Common.preserveListScroll(list, list, () => {
         let child;while((child=list.get_first_child())) list.remove(child);
         const sites=Sites.readSites(settings);
         sites.forEach((site,index)=>{

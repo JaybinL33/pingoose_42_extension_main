@@ -38,7 +38,5 @@ function build(settings){
     offset.connect('value-changed',()=>settings.set_int('dev-evaluation-offset-minutes',offset.get_value_as_int()));
     Me.imports.preferences.common.row(box,'Test Evaluation Start Offset (minutes)',offset);
     box.append(new Gtk.Label({label:'Negative: started minutes ago. Positive: starts in minutes. Applies to newly created test evaluations.',wrap:true,xalign:0}));
-    const scroll=new Gtk.ScrolledWindow({vexpand:true,hscrollbar_policy:Gtk.PolicyType.NEVER,min_content_height:360});
-    scroll.set_child(box);
-    return scroll;
+    return box;
 }

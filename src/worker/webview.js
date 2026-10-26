@@ -201,12 +201,19 @@ class Worker {
         this.nextProfileRead = now() + 2;
         this.profileReading = true;
         const identity = this.auth;
-        this.view.run_javascript_in_world(`(${readProfileDOM.toString()})(${JSON.stringify(identity.login)})`, 'pingoose-profile', this.cancel, (view, result) => {
+        const campusScript = this.profileCampus ? JSON.stringify(this.profileCampus) :
+            `(${imports.models.favoriteProfile.readDOM.toString()})(${JSON.stringify(identity.login)}, true)?.campus || null`;
+        this.view.run_javascript_in_world(`JSON.stringify({...JSON.parse((${readProfileDOM.toString()})(${JSON.stringify(identity.login)})),campus:${campusScript}})`, 'pingoose-profile', this.cancel, (view, result) => {
             this.profileReading = false;
             if (stopped || this.auth !== identity) return;
             try {
                 const profile = JSON.parse(view.run_javascript_in_world_finish(result).get_js_value().to_string());
                 if (profile.profileLogin && profile.profileLogin !== identity.login) { this.logout('account-error'); return; }
+                if (!this.profileCampus && imports.services.profileCampusCache.validCampus(profile.campus)) {
+                    this.profileCampus = profile.campus;
+                    try { imports.services.profileCampusCache.write(this.stateDirectory, identity, profile.campus); }
+                    catch (_) { /* Keep the session cache if disk storage is unavailable. */ }
+                }
                 if (!profile.name && profile.level === null) { this.nextProfileRead = now() + 3; return; }
                 const coreReady = profile.name && profile.level !== null && profile.progress !== null && profile.points !== null;
                 if (Array.isArray(profile.projects) && !profile.projects.length) {
@@ -331,6 +338,8 @@ class Worker {
             throw error;
         }
         if (this.auth?.header === header) { this.finishLogin(); return; }
+        if (this.auth?.subject !== info.subject || this.auth?.login !== info.login || !this.profileCampus)
+            this.profileCampus = imports.services.profileCampusCache.read(this.stateDirectory, info);
         this.auth = {...info, header}; // Only this helper's memory; never emit or persist headers/claims.
         try {
             const saved = this.readState();
@@ -340,6 +349,61 @@ class Worker {
         this.reloadAt = Infinity;
         status('authenticated');
         this.finishLogin();
+    }
+
+    lookupFavoriteClusters(request) {
+        if (!this.auth || this.signedOut || this.clusterLookup ||
+            !imports.models.featureFlags.enabled(this.featureSettings, 'hidden-cluster-chat') ||
+            !/^\d{1,24}$/.test(request.request || '')) return;
+        const identity = this.auth;
+        this.clusterLookup = true;
+        let finished = false;
+        let deadline = 0;
+        const finish = data => {
+            if (finished) return;
+            finished = true;
+            if (deadline) GLib.source_remove(deadline);
+            deadline = 0;
+            this.clusterLookup = false; this.cancelClusterLookup = null;
+            if (!stopped && this.auth === identity && !this.signedOut)
+                emit({type: 'favorite-clusters', request: request.request, ...data});
+        };
+        this.cancelClusterLookup = () => finish({error: 'Cluster lookup cancelled.'});
+        deadline = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 20, () => {
+            deadline = 0; finish({error:'Cluster lookup timed out. Please try again.'});
+            return GLib.SOURCE_REMOVE;
+        });
+        // Use Meta's own scoped cookies, never the profile API bearer token.
+        const get = (path, done) => {
+            const uri = 'https://meta.intra.42.fr' + path;
+            this.context.get_cookie_manager().get_cookies(uri, this.cancel, (manager, result) => {
+                if (finished) return;
+                try {
+                    const cookies = manager.get_cookies_finish(result);
+                    const message = Soup.Message.new('GET', uri);
+                    message.set_flags(Soup.MessageFlags.NO_REDIRECT);
+                    message.request_headers.append('Cookie', cookies.map(cookie => cookie.to_cookie_header()).join('; '));
+                    this.session.queue_message(message, (_session, response) => {
+                        if (finished) return;
+                        if (response.status_code !== 200 || response.response_body.length > 5000000) {
+                            finish({error: 'Could not load cluster seats. Open Meta Clusters in Pingoose and sign in, then try again.'});
+                            return;
+                        }
+                        try { done(response.response_body.data); }
+                        catch (_) { finish({error: 'Could not read the cluster response. Please try again.'}); }
+                    });
+                } catch (_) { finish({error: 'Could not load cluster seats. Please try again.'}); }
+            });
+        };
+        const loadSeats = () => get('/clusters.json', body =>
+            finish(imports.models.clusterSeats.snapshot(JSON.parse(body), this.clusterCampus)));
+        if (this.clusterCampus) loadSeats();
+        else get('/clusters', body => {
+            const campus = body.match(/\bdata-campus-id=["'](\d+)["']/)?.[1];
+            if (!campus) { finish({error: 'Could not identify your cluster campus. Please sign in to Meta Clusters.'}); return; }
+            this.clusterCampus = campus;
+            loadSeats();
+        });
     }
 
     lookupChatSeat(request){
@@ -354,7 +418,7 @@ class Worker {
         const view=new WebKit2.WebView({web_context:this.context});
         this.chatLookup=view;
         if(request.stateOnly)view.get_settings().set_auto_load_images(false);
-        let attempts=0,reading=false,profile=null,avatar=null,finished=false,avatarURL=null,avatarReading=false,availabilityKnown=false;
+        let attempts=0,reading=false,profile=null,avatar=null,finished=false,avatarURL=null,avatarReading=false,availabilityKnown=false,campus=null;
         const images=new Map();
         const readAvatar=()=>{
             const resource=images.get(avatarURL);
@@ -375,7 +439,7 @@ class Worker {
             finished=true;
             view.stop_loading();view.destroy();this.chatLookup=null;
             if(!stopped && this.auth===identity && !this.signedOut)
-                emit({type:'chat-lookup',...request,seat, ...(request.favorite ? {profile,avatar,seatKnown:availabilityKnown} : {})});
+                emit({type:'chat-lookup',...request,seat:campus && campus===this.profileCampus?seat:null, ...((!campus || campus!==this.profileCampus)?{error:campus && this.profileCampus?'Only users from your campus can be added or connected.':'Could not verify the campus. Reload your session and try again.'}:{}), ...(request.favorite ? {profile,avatar,seatKnown:availabilityKnown,campus} : {})});
             const queued=this.queuedChatLookup;
             this.queuedChatLookup=null;
             if(queued && !stopped && this.auth===identity && !this.signedOut)this.lookupChatSeat(queued);
@@ -412,20 +476,22 @@ class Worker {
             if(++attempts>15 || stopped || this.auth!==identity){finish(null);return GLib.SOURCE_REMOVE;}
             if(reading || (!request.favorite && view.is_loading))return GLib.SOURCE_CONTINUE;
             reading=true;
-            const script=`JSON.stringify({seat:Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null, unavailable:Array.from(document.querySelectorAll('div,span')).some(e=>!e.children.length && e.textContent.trim().toLowerCase()==='unavailable'), profile:${request.stateOnly ? 'null' : `(${imports.models.favoriteProfile.readDOM.toString()})(${JSON.stringify(request.login)})`}})`;
+            const script=`JSON.stringify({seat:Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null, unavailable:Array.from(document.querySelectorAll('div,span')).some(e=>!e.children.length && e.textContent.trim().toLowerCase()==='unavailable'), profile:(${imports.models.favoriteProfile.readDOM.toString()})(${JSON.stringify(request.login)})})`;
             view.run_javascript_in_world(script,'pingoose-chat-lookup',null,(page,result)=>{
                 reading=false;
                 if(this.chatLookup!==view)return;
                 try{
                     const data=JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
                     const seat=data.seat?.toLowerCase() || null;
+                    if(data.profile?.profileLogin===request.login)campus=data.profile.campus;
+                    if(campus && this.profileCampus && campus!==this.profileCampus){GLib.source_remove(timer);finish(null);return;}
                     if(request.favorite){
                         availabilityKnown = !!seat || !!data.unavailable;
                         if(!profile && data.profile?.profileLogin===request.login && data.profile.name)profile={name:data.profile.name};
                         if(data.profile?.profileLogin===request.login)avatarURL=data.profile.avatar || null;
                         readAvatar();
-                        if((profile || request.stateOnly) && availabilityKnown && (request.avatarCached || avatar || (!avatarURL && attempts>=5) || attempts>=14)){GLib.source_remove(timer);finish(seat);}
-                    }else if(seat){GLib.source_remove(timer);finish(seat);}
+                        if(campus && campus===this.profileCampus && (profile || request.stateOnly) && availabilityKnown && (request.avatarCached || avatar || (!avatarURL && attempts>=5) || attempts>=14)){GLib.source_remove(timer);finish(seat);}
+                    }else if(seat && campus && campus===this.profileCampus){GLib.source_remove(timer);finish(seat);}
                 }catch(_){}
             });
             return GLib.SOURCE_CONTINUE;
@@ -749,6 +815,9 @@ class Worker {
         this.signedOut = true;
         this.clearingLogin = true;
         this.auth = null;
+        this.profileCampus = null;
+        this.clusterCampus = null;
+        this.cancelClusterLookup?.();
         this.slotsService?.close();
         this.slotsService = null;
         this.evaluationState = null;
@@ -834,6 +903,7 @@ class Worker {
             if (time > 0xffffffff) return;
             return this.command(presentation[2], time);
         }
+        if(command.startsWith('favorites:clusters:')){try{this.lookupFavoriteClusters(JSON.parse(command.slice(19)));}catch(_){}return;}
         if(command.startsWith('chat:lookup:')){try{this.lookupChatSeat(JSON.parse(command.slice(12)));}catch(_){}return;}
         const subscription = /^agenda:(subscribe|unsubscribe):(\d+)$/.exec(command);
         if (subscription) { this.changeAgendaSubscription(subscription[2], subscription[1]); return; }
@@ -950,7 +1020,9 @@ class Worker {
             this.window.present_with_time(timestamp);
             if (!this.view.is_loading) this.view.load_uri(HOME);
         }
-        else if (command === 'show') { this.navigation.show(); this.window.show_all(); this.window.present_with_time(timestamp); }
+        else if (command === 'show') {
+            this.command('service:open:'+JSON.stringify({name:'42 Intra',url:'https://profile.intra.42.fr/'}),timestamp);
+        }
         else if (command === 'hide') this.window.hide();
 
     }
@@ -967,6 +1039,7 @@ class Worker {
     }
 
     close() {
+        this.cancelClusterLookup?.();
         this.closeServices();
         for (const window of this.projectWindows || []) window.destroy();
         this.slotsService?.close();
