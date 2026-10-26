@@ -11,7 +11,7 @@ var Binding=class Binding {
         this.registered=false;
         if(!this.settings.get_strv('panel-shortcut').length)return;
         Main.wm.addKeybinding('panel-shortcut',this.settings,Meta.KeyBindingFlags.NONE,
-            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP_MENU,()=>this.open());
+            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW | Shell.ActionMode.POPUP,()=>this.open());
         this.registered=true;
     }
     destroy(){if(this.registered)Main.wm.removeKeybinding('panel-shortcut');this.settings.disconnect(this.signal);}
