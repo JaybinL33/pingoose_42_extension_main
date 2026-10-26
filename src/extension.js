@@ -33,7 +33,7 @@ class Pingoose {
 
         this._indicator.onCountChanged = () => this._updatePanelLabel();
         Main.panel.addToStatusArea(Me.uuid, this._indicator);
-        this._panelShortcut=new Me.imports.services.panelShortcut.Binding(this._settings,()=>this._indicator.menu.open());
+        this._panelShortcut=new Me.imports.services.panelShortcut.Binding(this._settings,()=>this._indicator.menu.toggle());
         this._profileClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
             this._indicator?.refreshLogtimeTitle();
             if (this._indicator?.lastProfile) this._indicator.updateProfile(this._indicator.lastProfile);

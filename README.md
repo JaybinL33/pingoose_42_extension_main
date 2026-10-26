@@ -133,7 +133,7 @@ Settings → 42 Services에서 HTTPS 사이트를 최대 30개까지 추가·수
 
 | 항목 | 기본값 / 동작 |
 | --- | --- |
-| Open Pingoose shortcut | 기본 미지정. 키 조합을 입력해 메인 패널 열기, Reset으로 해제 |
+| Toggle Pingoose shortcut | 기본 미지정. 키 조합으로 메인 패널 열기·닫기, Reset으로 해제 |
 | Color mode | Dark. Dark / Light 선택 |
 | Check for Updates | 로그인 후에도 즉시 GitHub 업데이트 확인 |
 | Auto Update | 켜짐. 새 커밋 발견 시 자동 설치. 끄면 Yes/No로 확인 |

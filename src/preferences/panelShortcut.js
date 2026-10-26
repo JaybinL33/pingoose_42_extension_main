@@ -1,7 +1,7 @@
 const {Gtk,Gdk}=imports.gi;
 function append(parent,settings) {
     const row=new Gtk.Box({spacing:12});
-    row.append(new Gtk.Label({label:'Open Pingoose shortcut',hexpand:true,xalign:0,wrap:true}));
+    row.append(new Gtk.Label({label:'Toggle Pingoose shortcut',hexpand:true,xalign:0,wrap:true}));
     const capture=new Gtk.Button({label:'Not set'});
     const reset=new Gtk.Button({label:'Reset'});
     row.append(capture);row.append(reset);parent.append(row);
