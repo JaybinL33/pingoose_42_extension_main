@@ -1,4 +1,7 @@
 import importlib.util
+import argparse
+from contextlib import redirect_stderr, redirect_stdout
+import fcntl
 import io
 import json
 import os
@@ -324,9 +327,60 @@ class SourceArchives(unittest.TestCase):
         with zipfile.ZipFile(package) as archive:
             self.assertEqual(json.loads(archive.read('config/installed.json')), receipt)
 
+    def test_standalone_bootstrap_installs_and_cleans_source(self):
+        helper = self.root / 'updater.py'
+        helper.write_text(Path(updater.__file__).read_text())
+        payload = self.root / 'source.tar.gz'
+        payload.write_bytes(source_archive([('src/scripts/install.sh',
+            'cp .pingoose-source.json ../../receipt.json\nprintf "Package installed\\n"\n')]))
+        wrapper = '''
+import io, pathlib, runpy, sys
+from unittest.mock import patch
+payload, helper = sys.argv[1:3]
+sys.argv = sys.argv[2:]
+with patch('urllib.request.urlopen', side_effect=lambda *a, **kw: io.BytesIO(pathlib.Path(payload).read_bytes())):
+    runpy.run_path(helper, run_name='__main__')
+'''
+        result = subprocess.run(['python3', '-c', wrapper, str(payload), str(helper), 'bootstrap',
+            '--repository', CONFIG['repository'], '--commit', B], text=True, capture_output=True,
+            env=dict(os.environ, XDG_STATE_HOME=str(self.root / 'state')))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, 'Package installed\n')
+        updates = self.root / 'state/pingoose/updates'
+        self.assertEqual(json.loads((updates / 'receipt.json').read_text()), {'source': CONFIG, 'sha': B})
+        self.assertFalse(list(updates.glob('source-*')))
+
+    def test_bootstrap_uses_update_lock(self):
+        updates = self.root / 'state/pingoose/updates'
+        updates.mkdir(parents=True)
+        with (updates / 'lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = subprocess.run(['python3', updater.__file__, 'bootstrap',
+                '--repository', CONFIG['repository'], '--commit', B], text=True, capture_output=True,
+                env=dict(os.environ, XDG_STATE_HOME=str(self.root / 'state')))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, '')
+        self.assertIn('Another installation or update is already running.', result.stderr)
 
 
+class CommandOutput(unittest.TestCase):
+    def test_gnome_actions_return_json(self):
+        for action in ['check', 'install']:
+            with self.subTest(action=action):
+                stdout = io.StringIO()
+                with patch.object(updater, 'parse_args', return_value=argparse.Namespace(action=action)), \
+                        patch.object(updater, 'main', return_value={'status': 'current'}), redirect_stdout(stdout):
+                    self.assertEqual(updater.cli(), 0)
+                self.assertEqual(json.loads(stdout.getvalue()), {'status': 'current'})
 
+    def test_gnome_errors_return_json(self):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch.object(updater, 'parse_args', return_value=argparse.Namespace(action='install')), \
+                patch.object(updater, 'main', side_effect=updater.UpdateError('fixture failure')), \
+                redirect_stdout(stdout), redirect_stderr(stderr):
+            self.assertEqual(updater.cli(), 1)
+        self.assertEqual(json.loads(stdout.getvalue()), {'status': 'error', 'error': 'fixture failure'})
+        self.assertEqual(stderr.getvalue(), '')
 
 
 if __name__ == '__main__':

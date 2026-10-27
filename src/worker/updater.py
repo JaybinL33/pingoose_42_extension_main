@@ -10,6 +10,7 @@ import re
 import shutil
 import signal
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.error
@@ -242,9 +243,9 @@ def check(config, state, path, login, api=github, force=False, installed=None):
     return {'status': 'current'}
 
 
-def run_command(args, cwd=None, timeout=180):
-    process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL, start_new_session=True)
+def run_command(args, cwd=None, timeout=180, quiet=True):
+    process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL if quiet else None,
+                               stderr=subprocess.DEVNULL if quiet else None, start_new_session=True)
     try:
         process.wait(timeout=timeout)
     except subprocess.TimeoutExpired as error:
@@ -271,22 +272,34 @@ def install(config, state, path, approved, run=run_command, fetch=download_sourc
     return {'status': 'installed', 'commit': candidate}
 
 
-def main():
+def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['check', 'install'])
+    parser.add_argument('action', choices=['check', 'install', 'bootstrap'])
     parser.add_argument('--commit')
     parser.add_argument('--force', action='store_true')
-    args = parser.parse_args()
+    parser.add_argument('--repository')
+    parser.add_argument('--branch', default='main')
+    return parser.parse_args()
+
+
+def main(args):
     root = Path(__file__).resolve().parent.parent
     directory = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'pingoose/updates'
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = directory / 'state.json'
-    # Check and install share one lock, so concurrent Shell instances cannot race.
+    # Initial installation and updates share the same lock.
     with (directory / 'lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            if args.action == 'bootstrap':
+                raise UpdateError('Another installation or update is already running.')
             return {'status': 'busy'}
+        if args.action == 'bootstrap':
+            config = validate_configuration({'repository': args.repository, 'branch': args.branch})
+            install_source(config, args.commit,
+                           lambda *a, **kw: run_command(*a, **kw, quiet=False), parent=directory)
+            return {'status': 'installed'}
         config = configuration(root)
         state = load_json(path, {})
         if args.action == 'check':
@@ -295,9 +308,20 @@ def main():
         return install(config, state, path, args.commit)
 
 
-if __name__ == '__main__':
+def cli():
+    args = parse_args()
     try:
-        print(json.dumps(main()))
+        result = main(args)
     except Exception as error:
-        print(json.dumps({'status': 'error', 'error': str(error)[:300]}))
-        raise SystemExit(1)
+        if args.action == 'bootstrap':
+            print(f'Installation failed: {error}', file=sys.stderr)
+        else:
+            print(json.dumps({'status': 'error', 'error': str(error)[:300]}))
+        return 1
+    if args.action != 'bootstrap':
+        print(json.dumps(result))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(cli())

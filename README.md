@@ -4,7 +4,13 @@ GNOME Shell 42에서 42 Intra의 프로필, 프로젝트, 학습시간, 평가, 
 
 ## 설치 및 로그인
 
-42경산 교육용 PC의 Ubuntu 터미널에서 프로젝트 루트로 이동한 뒤 **sudo 없이** 실행합니다.
+42경산 교육용 PC의 GNOME 데스크톱 터미널에서 **sudo 없이** 실행합니다.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Pingoose-42/pingoose_42_extension_main/main/install.sh | bash
+```
+
+설치에 필요한 소스를 임시 디렉터리에 내려받아 설치하고, 작업이 끝나면 정리합니다. 개발용 소스가 이미 있다면 프로젝트 루트에서 다음 명령을 실행합니다.
 
 ```sh
 ./install.sh
