@@ -39,6 +39,16 @@ function readDOM(login, ownProfile = false) {
                 element.style.backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1];
             if (/^https:\/\/cdn\.intra\.42\.fr\/users\//.test(url || '')) { avatar = url; break; }
         }
+        if (!avatar && typeof document !== 'undefined') {
+            for (const element of document.querySelectorAll('img, [style]')) {
+                const url = element.tagName === 'IMG' ? element.src :
+                    element.style?.backgroundImage?.match(/url\(["']?(.*?)["']?\)/)?.[1];
+                if (url && new RegExp('/' + login + '\\.(?:jpg|jpeg|png|webp)(?:[?#]|$)', 'i').test(url)) {
+                    avatar = url;
+                    break;
+                }
+            }
+        }
         const banner = heading.closest?.('header, [role="banner"]');
         // The profile campus field uses the map-pin icon, unlike email/cursus/date.
         const campusButton = banner && Array.from(banner.querySelectorAll('button')).find(button =>

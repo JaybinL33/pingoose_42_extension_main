@@ -421,7 +421,16 @@ class Worker {
         let attempts=0,reading=false,profile=null,avatar=null,finished=false,avatarURL=null,avatarReading=false,availabilityKnown=false,campus=null;
         const images=new Map();
         const readAvatar=()=>{
-            const resource=images.get(avatarURL);
+            let targetURL = avatarURL;
+            if(!targetURL || !images.has(targetURL)){
+                for(const key of images.keys()){
+                    if(new RegExp('/' + request.login + '\\.(?:jpg|jpeg|png|webp)(?:[?#]|$)', 'i').test(key)){
+                        targetURL = key;
+                        break;
+                    }
+                }
+            }
+            const resource=images.get(targetURL);
             if(!resource || avatar || avatarReading || finished)return;
             const response=resource.get_response();
             if(response?.get_status_code()!==200 || !/^image\//.test(response.get_mime_type() || ''))return;

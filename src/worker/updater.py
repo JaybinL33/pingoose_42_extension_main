@@ -123,7 +123,13 @@ def check(config, state, path, login, api=github, force=False, installed=None):
     if baseline is None:
         state['candidate'] = commit
     elif sha != baseline:
-        comparison = api(config, f'compare/{baseline}...{sha}')
+        try:
+            comparison = api(config, f'compare/{baseline}...{sha}')
+        except UpdateError as error:
+            if 'HTTP 404' in str(error):
+                comparison = {}
+            else:
+                raise
         if comparison.get('status') in ('ahead', 'diverged'):
             state['candidate'] = commit
             commits = comparison.get('commits', [])
