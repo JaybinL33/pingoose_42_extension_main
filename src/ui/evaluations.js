@@ -27,7 +27,7 @@ var Controller = class Controller {
             if (actor.text !== text) actor.text = text;
         }
         this._syncOptionalSections();
-        const key = JSON.stringify([rows, this._feedback, rows.map(row=>(row.users || []).map(login=>!!this._chatPanel?.canEvaluation(row,login))), rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=899000])]);
+        const key = JSON.stringify([rows, this._indicator.lastProfile?.name, this._feedback, rows.map(row=>(row.users || []).map(login=>!!this._chatPanel?.canEvaluation(row,login))), rows.map(row => [Date.parse(row.begin) <= Date.now(), Date.parse(row.begin)-Date.now()<=899000])]);
         if (key === this._evaluationKey) return;
         this._evaluationKey = key;
         const section = this._indicator.evaluations;
@@ -72,7 +72,7 @@ var Controller = class Controller {
             if(row.missing)label('Evaluation Missing · This match is no longer listed.', 'pingoose-evaluation-title');
             for (const login of row.users?.length ? row.users : [null]) {
                 const person = new St.BoxLayout({style_class: 'pingoose-evaluation-person'});
-                const avatar = new St.Bin({width: 44, height: 44, style_class: 'pingoose-avatar pingoose-counterpart-avatar', y_align: Clutter.ActorAlign.CENTER});
+                const avatar = new St.Bin({width: 52, height: 52, style_class: 'pingoose-avatar pingoose-counterpart-avatar', y_align: Clutter.ActorAlign.CENTER});
                 let image = new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 34});
                 if (login && row.avatars?.includes(login) && /^[a-zA-Z0-9_-]{1,64}$/.test(login)) {
                     const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', row.devTest && row.devSelf && login===GLib.get_user_name() ? 'profile-avatar' : `counterpart-${login}`]));
@@ -85,7 +85,8 @@ var Controller = class Controller {
                 person.add_child(avatar);
                 const details = new St.BoxLayout({vertical: true, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-person-details'});
                 if(login){
-                    const profileButton=new St.Button({label:`@${login}`,can_focus:true,x_align:Clutter.ActorAlign.START,style_class:'pingoose-counterpart-link'});
+                    const profileLink=(caption,style)=>{
+                    const profileButton=new St.Button({label:caption,can_focus:true,x_align:Clutter.ActorAlign.START,style_class:style});
                     const menu=new PopupMenu.PopupMenu(profileButton,1.0,St.Side.TOP);
                     imports.ui.main.uiGroup.add_child(menu.actor);menu.actor.hide();
                     this._optionsManager ||= new PopupMenu.PopupMenuManager(this._indicator);
@@ -97,9 +98,16 @@ var Controller = class Controller {
                     const parentSignal=this._indicator.menu.connect('open-state-changed',(_menu,open)=>{if(!open)menu.close();});
                     profileButton.connect('destroy',()=>{this._indicator.menu.disconnect(parentSignal);this._optionsManager?.removeMenu(menu);menu.destroy();});
                     profileButton.connect('clicked',()=>menu.toggle());
-                    details.add_child(profileButton);
+                    return profileButton;
+                    };
+                    const fullName=row.names?.[login] || (this._indicator.lastProfile?.login===login?this._indicator.lastProfile.name:null);
+                    details.add_child(profileLink(fullName || 'Loading name…','pingoose-counterpart-link pingoose-counterpart-name'));
+                    const identityLine=new St.BoxLayout({style_class:'pingoose-counterpart-identity',y_align:Clutter.ActorAlign.CENTER});
+                    identityLine.add_child(profileLink('@'+login,'pingoose-counterpart-link pingoose-counterpart-nick'));
+                    identityLine.add_child(new St.Label({text:row.seats?.[login] || 'Unavailable',y_align:Clutter.ActorAlign.CENTER,style_class:'pingoose-person-seat'}));
+                    details.add_child(identityLine);
                 }else details.add_child(new St.Label({text:'Awaiting match',style_class:'pingoose-person-login'}));
-                details.add_child(new St.Label({text: `Seat · ${login ? row.seats?.[login] || 'Unavailable' : 'Unavailable'}`, style_class: 'pingoose-person-seat'}));
+                if(!login)details.add_child(new St.Label({text:'Unavailable',style_class:'pingoose-person-seat'}));
                 person.add_child(details);
                 box.add_child(person);
                 if(login && this._chatPanel?.canEvaluation(row,login)) {

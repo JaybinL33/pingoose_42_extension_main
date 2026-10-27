@@ -14,7 +14,14 @@ function append(parent,settings) {
     keys.connect('key-pressed',(_controller,key,_code,state)=>{
         if(!recording)return false;
         if(key===Gdk.KEY_Escape){recording=false;update();return true;}
+        // Modifier presses begin a combination; they are not the shortcut itself.
+        if ([Gdk.KEY_Control_L,Gdk.KEY_Control_R,Gdk.KEY_Shift_L,Gdk.KEY_Shift_R,
+            Gdk.KEY_Alt_L,Gdk.KEY_Alt_R,Gdk.KEY_Super_L,Gdk.KEY_Super_R,
+            Gdk.KEY_Meta_L,Gdk.KEY_Meta_R,Gdk.KEY_Hyper_L,Gdk.KEY_Hyper_R,
+            Gdk.KEY_ISO_Level3_Shift].includes(key)) return true;
         const mods=state & Gtk.accelerator_get_default_mod_mask();
+        key=Gdk.keyval_to_lower(key);
+        if(key===Gdk.KEY_ISO_Left_Tab)key=Gdk.KEY_Tab;
         if(!Gtk.accelerator_valid(key,mods))return true;
         settings.set_strv('panel-shortcut',[Gtk.accelerator_name(key,mods)]);
         recording=false;update();return true;

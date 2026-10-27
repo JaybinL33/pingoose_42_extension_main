@@ -47,9 +47,9 @@ assert(!silent.available(grant), 'TCP connection without a valid hello must stay
 silent.configure({active:true, general:false, login:grant.login, grants:[], sessions:[grant]});
 silent.configure({active:true, general:false, login:grant.login, grants:[grant], sessions:[grant]});
 silent.probe(grant);
-assert(silentAttempts === 1 && !silent.peer(grant.seat), 'temporary stale grant must not revive a background probe');
+assert(!silent.available(grant), 'confirmed offline then online requires a fresh handshake');
 assert(silentMessages === 0, 'silent peer generates no chat entries');
 silent.destroy();
 for (const conn of connections) conn.close(null);
 silentServer.stop(); silentServer.close();
-print('PASS: nonresponsive peer stays hidden; stale-grant refresh does not retry or create chat');
+print('PASS: nonresponsive peer stays hidden; restored availability requires an authenticated handshake');

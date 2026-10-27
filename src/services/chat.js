@@ -65,7 +65,7 @@ var ChatService = class ChatService {
         for (const set of [this._probes, this._available]) {
             for (const key of set) {
                 const [id, login, seat, expires] = JSON.parse(key);
-                if (!policy.active || expires <= Date.now() || !(policy.sessions || policy.grants).some(item => item.id === id && item.login === login && item.expires === expires)) set.delete(key);
+                if (!policy.active || expires <= Date.now() || !policy.grants.some(item => item.id === id && item.login === login && item.seat === seat && item.expires === expires)) set.delete(key);
             }
         }
         for(const peer of this.peers) {

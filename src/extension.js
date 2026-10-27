@@ -50,10 +50,11 @@ class Pingoose {
         this._feedback = {};
         this._restoreCardState();
         this._renderEvaluations();
-        this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); this._updateAgendaTimes(); return GLib.SOURCE_CONTINUE; });
+        this._evaluationClock = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => { this._renderEvaluations(); this._updateAgendaTimes(); this._pollSlotsIfDue(); return GLib.SOURCE_CONTINUE; });
         this._workerStatus = null;
         this._slotsExpanded = this._settings.get_boolean('expand-slots');
         this._slots = [];
+        this._slotPollingReady=false;this._slotPollBucket=null;
         this._slotDraft = null;
         this._slotCreateExpanded = false;
         this._indicator.visitIntra.connect('clicked', () => {
@@ -120,6 +121,7 @@ class Pingoose {
         this._projectPanel?.reset();
         this._chatPanel?.reset();
         this._slots = [];
+        this._slotPollingReady=false;this._slotPollBucket=null;
         this._slotDraft = null;
         this._slotCreateExpanded = false;
         this._slotsExpanded = false;
@@ -240,16 +242,16 @@ class Pingoose {
         }
         if(message.type==='favorite-clusters'){this._chatPanel?._favorites?.completeClusters(message);return;}
         if(message.type==='chat-lookup'){this._chatPanel?.completeLookup(message);return;}
+        if(message.type==='evaluation-check'){
+            this._sessionEvaluationResult=message;
+            this._finishSessionCheck();return;
+        }
         if (message.type === 'slots') {
             if(this._refreshPending){
                 this._refreshSlotsDone=Array.isArray(message.rows) && !message.error;
                 if(message.error)this._finishRefresh(false);
                 else this._checkRefreshDone();
             }
-            const callback = this._sessionSlotsCallback;
-            this._sessionSlotsCallback = null;
-            if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
-            this._sessionSlotsTimer = 0;
             this._slotsBusy = false;
             if(this._slotCreating && !message.error && message.created>0){
                 this._slotCreateExpanded=false;
@@ -259,7 +261,8 @@ class Pingoose {
             if (Array.isArray(message.rows) && message.rows.length <= 1000) this._slots = message.rows;
             this._slotsError = typeof message.error === 'string' ? message.error.slice(0, 200) : null;
             this._renderSlots();
-            callback?.(message);
+            this._sessionSlotResult=message;
+            this._finishSessionCheck();
             return;
         }
         if (message.type === 'evaluation-dismissed' && typeof message.id === 'string') {
@@ -316,11 +319,12 @@ class Pingoose {
                 this._clearProfile();
                 Main.notify('Pingoose', 'Your Intra ID must match the current PC username. Information from another account cannot be loaded.');
             }
-            if (message.state === 'login-needed') this._indicator.setLoginOnly(true);
+            if (message.state === 'login-needed') {this._slotPollingReady=false;this._slotPollBucket=null;this._indicator.setLoginOnly(true);}
             else if (['authenticated', 'watching'].includes(message.state)) {
                 const wasLoginOnly = this._indicator.loginOnly;
                 this._indicator.setLoginOnly(false);
-                if (wasLoginOnly) {this._restoreCardState?.();this._renderCards();this._renderEvaluations();if(this._slotsExpanded)this._requestSlots('slots:list');}
+                this._slotPollingReady=true;this._pollSlotsIfDue();
+                if (wasLoginOnly) {this._restoreCardState?.();this._renderCards();this._renderEvaluations();}
             }
             this._indicator.status.label.text = message.state;
             return;

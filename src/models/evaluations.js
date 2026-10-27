@@ -72,9 +72,11 @@ function storedState(text) {
         parsed.missing=row.missing===true;
         parsed.missingAt=Number.isFinite(row.missingAt)?row.missingAt:null;
         parsed.avatars = Array.isArray(row.avatars) ? row.avatars.filter(login => parsed.users.includes(login)) : [];
+        parsed.names = {};
         parsed.seats = {};
         parsed.chatConfirmedAt = {};
         for (const login of parsed.users) {
+            if(typeof row.names?.[login]==='string')parsed.names[login]=row.names[login].slice(0,100);
             const seat = row.seats?.[login];
             if(Number.isFinite(row.chatConfirmedAt?.[login]))parsed.chatConfirmedAt[login]=row.chatConfirmedAt[login];
             if (typeof seat === 'string' && (seat === 'Unavailable' || /^c[0-9]+r[0-9]+s[0-9]+$/i.test(seat))) parsed.seats[login] = seat;

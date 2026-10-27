@@ -29,7 +29,7 @@ const start=source.indexOf('        const finish = seat => {',source.indexOf('  
 const end=source.indexOf('\n        let attempts',start);
 const finishSource=source.slice(start,end);
 const seatRow={id:'2',begin:row.begin_at,project:'Test'};
-const seatContext={...ctx,stopped:false,view:{destroy(){}},identity,row:seatRow,login:'peer',finished:false};
+const seatContext={...ctx,stopped:false,view:{destroy(){}},identity,row:seatRow,login:'peer',finished:false,foundName:'Peer Name',confirmedUnavailable:false,avatarCached:true};
 const holder={auth:identity,evaluationState:{evaluations:[{...seatRow}],reminders:[]},writeState:()=>{},publishEvaluations:()=>{}};
 vm.createContext(seatContext);
 function seatLookup(seat){
@@ -42,6 +42,9 @@ seatLookup('c1r1s2');assert.equal(notices.length,afterFirst+1,'changed seat anno
 seatLookup(null);
 assert.equal(holder.evaluationState.evaluations[0].seats.peer,'c1r1s2','first miss keeps confirmed seat');
 seatLookup(null);
+assert.equal(holder.evaluationState.evaluations[0].seats.peer,'c1r1s2','repeated unknown responses retain seat');
+seatContext.confirmedUnavailable=true;seatLookup(null);
+assert.equal(holder.evaluationState.evaluations[0].names.peer,'Peer Name');
 assert.equal(holder.evaluationState.evaluations[0].seats.peer,'Unavailable');
 assert.equal(holder.evaluationState.evaluations[0].chatConfirmedAt.peer,undefined,'failed lookup revokes cached confirmation');
 holder.evaluationState.evaluations=[];seatLookup('c1r1s3');

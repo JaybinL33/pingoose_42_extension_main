@@ -72,6 +72,7 @@ var Controller = class Controller {
                 const login=profile?.login || GLib.get_user_name();
                 const seat=String(profile?.location || GLib.get_host_name()).split('.')[0].toLowerCase();
                 row.users=[login];row.seats={[login]:/^c\d+r\d+s\d+$/.test(seat)?seat:'Unavailable'};
+                row.names=profile?.name?{[login]:profile.name}:{};
                 row.devSelf=true;row.avatars=[login];row.chatConfirmedAt={[login]:Date.now()};
                 this._evaluations=[...this._evaluations,row];this._saveCardState();this._renderEvaluations();settings.close();
                 this._message(Me.imports.models.evaluations.notification(row));

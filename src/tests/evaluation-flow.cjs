@@ -26,7 +26,8 @@ class Actor {
 }
 class Section {constructor(){this.items=[];} removeAll(){this.items=[];} addMenuItem(i){this.items.push(i);}}
 let banners=0;
-class Menu {constructor(){this.actor={hide(){}};}addAction(){}toggle(){}close(){}destroy(){}}
+const profileMenus=[];
+class Menu {constructor(){this.actor={hide(){}};profileMenus.push(this);}addAction(label,action){this.action=action;}toggle(){this.toggled=true;}close(){}destroy(){}}
 const context={imports:{ui:{main:{uiGroup:{add_child(){}}}}},PopupMenu:{PopupMenu:Menu,PopupBaseMenuItem:Actor,PopupMenuItem:Actor},St:{Side:{TOP:0},BoxLayout:Actor,Label:Actor,Button:Actor,Bin:Actor,Icon:Actor},Clutter:{ActorAlign:{CENTER:0,END:1}},Pango:{WrapMode:{WORD_CHAR:0},EllipsizeMode:{NONE:0}},Main:{notify(){banners++;}},GLib:{DateTime:{new_now_local:()=>({format:()=> '18:45'})}}};
 vm.createContext(context);
 vm.runInContext('class Probe {'+source.slice(source.indexOf('    _message(message)'),source.indexOf('    _flashScreen('))+source.slice(source.indexOf('    _renderCards()'),source.indexOf('    disable()'))+'}; globalThis.Probe=Probe;',context);
@@ -141,3 +142,14 @@ p._message({type:'notification',id:'muted-agenda',category:'agenda',body:'Muted 
 assert.equal(banners,beforeMuted);
 assert.equal(p._notifications.length,2,'muting banners preserves cards');
 console.log('PASS: muted evaluation and agenda system notifications preserve cards');
+
+e._indicator.menu.close=()=>{};
+e._evaluations=[{id:'profile-links',project:'Project',begin:new Date(Date.now()+600000).toISOString(),users:['peer'],names:{peer:'Peer Full Name'},seats:{peer:'c1r2s3'}}];
+e._evaluationKey=null;e._renderEvaluations();
+const flatten=actor=>[actor,...(actor.children || []).flatMap(flatten)];
+const actors=flatten(e._indicator.evaluations.items[0]);
+const nameButton=actors.find(actor=>actor.label==='Peer Full Name'),nickButton=actors.find(actor=>actor.label==='@peer');
+assert(nameButton && nickButton);nameButton.clicked();nickButton.clicked();
+for(const menu of profileMenus.slice(-2)){assert(menu.toggled);menu.action();assert.match(e.sent,/users\/peer/);}
+assert(actors.some(actor=>actor.text==='c1r2s3'));
+console.log('PASS: full name and nickname separately open the same Intra profile action, with seat on identity line');

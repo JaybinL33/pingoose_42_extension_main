@@ -3,15 +3,36 @@ const {Clutter, GLib, Pango, St} = imports.gi;
 const PopupMenu = imports.ui.popupMenu;
 
 var Controller = class Controller {
+    _pollSlotsIfDue(time = Date.now()) {
+        if(!this._slotPollingReady || this._indicator.loginOnly || this._slotsBusy)return;
+        const bucket=Math.floor(time / 900000);
+        if(this._slotPollBucket===bucket)return;
+        this._slotPollBucket=bucket;
+        this._requestSlots('slots:list');
+    }
+
+    _finishSessionCheck() {
+        if(!this._sessionSlotsCallback || !this._sessionSlotResult || !this._sessionEvaluationResult)return;
+        const callback=this._sessionSlotsCallback;
+        this._sessionSlotsCallback=null;
+        if(this._sessionSlotsTimer)GLib.source_remove(this._sessionSlotsTimer);
+        this._sessionSlotsTimer=0;
+        callback({...this._sessionSlotResult,evaluations:this._sessionEvaluationResult.rows,
+            evaluationError:this._sessionEvaluationResult.error});
+    }
+
     _sessionSlotRequest(command, callback) {
         // Reuse an in-flight list request rather than opening a second WebKit session.
         this._sessionSlotsCallback = callback;
+        this._sessionSlotResult=null;
+        this._sessionEvaluationResult=command==='slots:list'?null:{};
+        if(command==='slots:list')this._send('evaluations:check');
         if (this._sessionSlotsTimer) GLib.source_remove(this._sessionSlotsTimer);
         this._sessionSlotsTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 65, () => {
             this._sessionSlotsTimer = 0;
             const pending = this._sessionSlotsCallback;
             this._sessionSlotsCallback = null;
-            pending?.({error: 'Slot request timed out.'});
+            pending?.({...this._sessionSlotResult,error:this._sessionSlotResult?.error || (!this._sessionSlotResult?'Slot request timed out.':null),evaluationError:'Evaluation check timed out.'});
             return GLib.SOURCE_REMOVE;
         });
         if (!this._slotsBusy) this._requestSlots(command);

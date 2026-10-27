@@ -635,6 +635,8 @@ class Worker {
         });
         let avatarSaved = false;
         let foundSeat = null;
+        let confirmedUnavailable = false;
+        let foundName = row.names?.[login] || null;
         if (!avatarCached) view.connect('resource-load-started', (_view, resource, request) => {
             const uri = request.get_uri() || '';
             const match = uri.match(/^https:\/\/cdn\.intra\.42\.fr\/users\/.*\/([a-zA-Z0-9_-]+)\.(?:jpg|jpeg|png|webp)(?:[?#]|$)/i);
@@ -661,6 +663,23 @@ class Worker {
                 });
             });
         });
+        // Reuse the profile JSON response already fetched by the page when DOM
+        // hydration is slow. Match the requested login, never the navbar user.
+        if(!foundName)view.connect('resource-load-started',(_view,resource,request)=>{
+            if(!/^https:\/\/intrapy\.intra\.42\.fr\/api\/v1\/users(?:[/?]|$)/.test(request.get_uri() || ''))return;
+            resource.connect('finished',()=>{
+                const response=resource.get_response();
+                if(response?.get_status_code()!==200 || !/json/i.test(response.get_mime_type() || ''))return;
+                resource.get_data(this.cancel,(item,result)=>{
+                    try{
+                        const bytes=item.get_data_finish(result);
+                        if(finished || stopped || this.auth!==identity || !bytes?.length || bytes.length>2000000)return;
+                        const profile=imports.models.favoriteProfile.fromResponse(JSON.parse(ByteArray.toString(bytes)),login);
+                        if(profile?.name)foundName=profile.name;
+                    }catch(_){}
+                });
+            });
+        });
         let finished = false;
         const finish = seat => {
             if (finished) return;
@@ -669,15 +688,12 @@ class Worker {
             this.counterpartChecks?.set(`${row.id}:${row.begin}:${login}`,now());
             if (stopped || this.auth !== identity) return;
             const stored = this.evaluationState?.evaluations.find(item => item.id === row.id && item.begin === row.begin);
-            // A missing seat revokes chat; never fall back to an old location.
             if(!stored || stored.missing || Date.parse(stored.begin)<=Date.now())return;
-            this.seatMisses ||= new Map();
-            const missKey=`${row.id}:${row.begin}:${login}`;
-            if(seat)this.seatMisses.delete(missKey);
-            else if(/^c\d+r\d+s\d+$/i.test(stored.seats?.[login] || '')){
-                const misses=(this.seatMisses.get(missKey)||0)+1;
-                this.seatMisses.set(missKey,misses);
-                if(misses<2)return;
+            if(foundName)stored.names={...stored.names,[login]:foundName};
+            // A timeout or incomplete page is unknown, not evidence of logout.
+            if(!seat && !confirmedUnavailable){
+                if(foundName){this.writeState(this.evaluationState);this.publishEvaluations();}
+                return;
             }
             row.seats = {...row.seats, [login]: seat || 'Unavailable'};
             const seatNotice=`${row.id}:lookup:${row.begin}:${login}`;
@@ -692,17 +708,22 @@ class Worker {
             }
             if (notify) emit({type: 'notification', update:true, id: `reminder:${row.id}:${row.begin}:${login}`, body: `Evaluation match confirmed · ${row.project}\n${login} · Seat: ${seat || 'Unavailable'}`});
         };
-        const lookupLimit = row.chatConfirmedAt?.[login] && avatarCached ? 5 : 15;
+        const lookupLimit = row.chatConfirmedAt?.[login] && avatarCached && foundName ? 5 : 15;
         let attempts = 0;
         const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             if (finished) return GLib.SOURCE_REMOVE;
             if (++attempts >= lookupLimit || stopped || this.auth !== identity) { finish(foundSeat); return GLib.SOURCE_REMOVE; }
             // Seat lookup is deliberately conservative: no arbitrary page text is reported.
-            view.run_javascript_in_world(`JSON.stringify(Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length ? '' : e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null)`, 'pingoose-seat', this.cancel, (page, result) => {
+            const profileScript=foundName?'null':`(${imports.models.favoriteProfile.readDOM.toString()})(${JSON.stringify(login)})`;
+            const script=`JSON.stringify({profile:${profileScript},valid:location.pathname.replace(/\\/$/,'')===${JSON.stringify('/users/'+login)} && !!document.querySelector('header h2'),seat:Array.from(document.querySelectorAll('div,span')).map(e=>e.children.length?'':e.textContent.trim()).find(t=>/^c[0-9]+r[0-9]+s[0-9]+$/i.test(t)) || null,unavailable:Array.from(document.querySelectorAll('div,span')).some(e=>!e.children.length && e.textContent.trim().toLowerCase()==='unavailable')})`;
+            view.run_javascript_in_world(script, 'pingoose-seat', this.cancel, (page, result) => {
                 try {
-                    const seat = JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
-                    if (seat) foundSeat = seat;
-                    if (foundSeat && (avatarSaved || avatarCached)) { GLib.source_remove(timer); finish(foundSeat); }
+                    const data = JSON.parse(page.run_javascript_in_world_finish(result).get_js_value().to_string());
+                    if(data.profile?.name)foundName=data.profile.name;
+                    if(data.valid && data.seat)foundSeat=data.seat;
+                    confirmedUnavailable=!!(data.valid && data.unavailable && !data.seat);
+                    if(confirmedUnavailable)foundSeat=null;
+                    if ((foundSeat || confirmedUnavailable) && foundName && (avatarSaved || avatarCached)) { GLib.source_remove(timer); finish(foundSeat); }
                 } catch (_) {}
             });
             return GLib.SOURCE_CONTINUE;
@@ -774,7 +795,14 @@ class Worker {
                 this.reloadAt = now() + this.backoff;
             }
             if (state) {this.fail(state, wait);this.refreshPart('evaluations',false);}
-            else this.refreshPart('evaluations',this.receive(text, identity));
+            else {
+                if(!this.receive(text, identity))state='response-error';
+                this.refreshPart('evaluations',!state);
+            }
+            if(this.sessionEvaluationCheck){
+                this.sessionEvaluationCheck=false;
+                emit({type:'evaluation-check',...(state?{error:'Unable to refresh evaluations.'}:{rows:this.evaluationState?.evaluations || []})});
+            }
         };
         this.session.send_async(message, cancel, (session, result) => {
             try {
@@ -976,6 +1004,13 @@ class Worker {
                 this.serviceWindows.add(window);
                 window.connect('destroy', () => this.serviceWindows.delete(window));
             } catch (_) { status('service-error'); }
+            return;
+        }
+        if(command==='evaluations:check'){
+            if(!this.auth || this.signedOut){emit({type:'evaluation-check',error:'Not authenticated.'});return;}
+            if(!this.pending && now()<this.notBefore){emit({type:'evaluation-check',error:'Evaluation refresh is waiting for the server retry interval.'});return;}
+            this.sessionEvaluationCheck=true;
+            if(!this.pending)this.poll();
             return;
         }
         if (command === 'slots:list' || command === 'slots:all' || command === 'slots:future' || /^slots:close:[0-9]+$/.test(command)) {

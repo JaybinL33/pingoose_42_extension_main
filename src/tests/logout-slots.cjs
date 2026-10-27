@@ -84,3 +84,16 @@ assert(labels.some(t=>t.includes('[Test] Test Evaluation')));
 assert(!labels.some(t=>t.includes('Invalid Date') || t.includes('Open slots')));
 previewHook._dialog.buttons.find(button=>button.label==='Cancel').action();previewHook.disable();
 console.log('PASS: future test card previews scheduled warning without inventing duration or open slots');
+
+const realMatch={id:'actual',project:'Real Project',begin:future.start,kind:'evaluator',users:[]};
+const realHook=new ctx.SystemSessionHook((cmd,cb)=>pending.push(cb),()=>true,()=>true,()=>[]);
+realHook.enable();
+new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[future],evaluations:[realMatch]});
+assert(walk(realHook._dialog.contentLayout).some(a=>a.text?.includes('Real Project')));
+assert(walk(realHook._dialog.contentLayout).some(a=>a.text==='Scheduled evaluations · 1'));
+realHook._dialog.buttons.find(b=>b.label==='Cancel').action();
+new Native()._confirm('ConfirmedLogout');pending.shift()({rows:[reserved],evaluations:[realMatch]});
+assert(walk(realHook._dialog.contentLayout).some(a=>a.text==='Scheduled evaluations · 1'));
+assert(walk(realHook._dialog.contentLayout).some(a=>a.text?.includes('Real Project')));
+realHook._dialog.buttons.find(b=>b.label==='Cancel').action();realHook.disable();
+console.log('PASS: real scheduled matches from fresh evaluation snapshot warn and deduplicate reserved slots');
