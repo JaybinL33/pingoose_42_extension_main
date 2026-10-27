@@ -14,6 +14,7 @@ for test in src/tests/*.cjs; do
     node "$test"
 done
 python3 src/tests/updater.py
+bash -n install.sh src/scripts/install.sh src/scripts/test.sh
 glib-compile-schemas --strict --dry-run src/schemas
 if [[ ${1:-} == --sockets ]]; then
     for name in scoped-loopback rejection-loopback probe seat-migration self-loopback; do
