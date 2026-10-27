@@ -2,6 +2,22 @@ const {Clutter, Gio, GLib, Meta, Pango, St} = imports.gi;
 const Me = imports.misc.extensionUtils.getCurrentExtension();
 const Flags = Me.imports.models.featureFlags;
 
+function hasValidAvatar(file) {
+    try {
+        if (!file?.query_exists?.(null)) return false;
+        if (typeof file.query_info === 'function') {
+            const info = file.query_info('standard::size', Gio.FileQueryInfoFlags.NONE, null);
+            if (info && info.get_size() < 100) {
+                try { file.delete(null); } catch (_) {}
+                return false;
+            }
+        }
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 var Panel = class Panel {
     constructor(chat) {
         this.chat = chat;
@@ -199,7 +215,7 @@ var Panel = class Panel {
             return GLib.SOURCE_REMOVE;
         });
         const image = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', 'favorite-' + item.login]));
-        this.pending.avatarCached = !item.photoAttempt && image.query_exists(null);
+        this.pending.avatarCached = !item.photoAttempt && hasValidAvatar(image);
         this.pending.stateOnly = !item.add && this.pending.avatarCached;
         this.chat._send('chat:lookup:' + JSON.stringify({...this.pending, favorite: true}));
     }
@@ -226,11 +242,16 @@ var Panel = class Panel {
             }
             if (message.avatar && message.avatar.length <= 2700000 && this.rows.some(value => value.login === item.login)) {
                 try {
-                    const path = GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose']);
-                    GLib.mkdir_with_parents(path, 0o700);
-                    Gio.File.new_for_path(path + '/favorite-' + item.login).replace_contents(GLib.base64_decode(message.avatar), null, false,
-                        Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
-                    photoSaved = true;
+                    const decoded = GLib.base64_decode(message.avatar);
+                    if (!decoded || (decoded.length !== undefined && decoded.length > 0 && decoded.length < 100)) {
+                        // Ignore corrupt or invalid image data
+                    } else {
+                        const path = GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose']);
+                        GLib.mkdir_with_parents(path, 0o700);
+                        Gio.File.new_for_path(path + '/favorite-' + item.login).replace_contents(decoded, null, false,
+                            Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+                        photoSaved = true;
+                    }
                 } catch (_) { this.feedback.text = 'Could not save the profile photo.'; }
             }
             this.save();
@@ -294,7 +315,7 @@ var Panel = class Panel {
             const identity = new St.BoxLayout({style_class: 'pingoose-identity'});
             const avatar = new St.Bin({width: 52, height: 52, y_align: Clutter.ActorAlign.CENTER, style_class: 'pingoose-avatar pingoose-favorite-avatar'});
             const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', 'favorite-' + row.login]));
-            if (file.query_exists(null)) {
+            if (hasValidAvatar(file)) {
                 avatar.set_child(null);
                 avatar.set_style(`background-image: url("${file.get_uri()}"); background-size: cover;`);
             } else avatar.set_child(new St.Icon({icon_name: 'avatar-default-symbolic', icon_size: 32}));

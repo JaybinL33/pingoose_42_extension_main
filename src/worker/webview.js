@@ -430,7 +430,7 @@ class Worker {
                 avatarReading=false;
                 try{
                     const bytes=item.get_data_finish(result);
-                    if(!finished && bytes?.length && bytes.length<=2000000)avatar=GLib.base64_encode(bytes);
+                    if(!finished && bytes?.length && bytes.length>=100 && bytes.length<=2000000)avatar=GLib.base64_encode(bytes);
                 }catch(_){}
             });
         };
