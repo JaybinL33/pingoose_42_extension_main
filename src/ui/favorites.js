@@ -121,8 +121,21 @@ var Panel = class Panel {
         this.root.visible = allowed && this.expanded && this.chat._chatUi.root.visible;
         this.chat._chatUi.favorites.visible = allowed;
         this.chat._chatUi.favorites.style_class = 'pingoose-chat-add' + (this.root.visible ? ' pingoose-toggle-active' : '');
-        if (this.root.visible) this.chat._indicator.sideColumns.set_child_below_sibling(this.root, this.chat._chatUi.root);
+        if (this.root.visible) {
+            this.chat._indicator.sideColumns.set_child_below_sibling(this.root, this.chat._chatUi.root);
+            this.queueMissingPhotos();
+        }
         this.chat._indicator.syncPanelLayout?.();
+    }
+    queueMissingPhotos() {
+        if (!this.allowed()) return;
+        for (const row of this.rows) {
+            const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_state_dir(), 'pingoose', 'favorite-' + row.login]));
+            if (!hasValidAvatar(file) && !this.queue.some(item => item.login === row.login) && this.pending?.login !== row.login) {
+                this.queue.push({login: row.login});
+            }
+        }
+        this.next();
     }
     setAddBusy(busy) {
         this.addButton.reactive = this.addButton.can_focus = !busy;
