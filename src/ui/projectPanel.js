@@ -69,7 +69,9 @@ var ProjectPanel=class ProjectPanel {
         bodyContent.add_child(this.body);
         this.bodyScroll.add_actor(bodyContent);
         this.bodyScroll.set_clip_to_allocation(true);
-        const revealCursor=()=>{
+        let revealRequested=false;
+        const revealCursor=(reveal=true)=>{
+            revealRequested ||= reveal;
             if(this.cursorLater)return;
             this.cursorLater=Meta.later_add(Meta.LaterType.BEFORE_REDRAW,()=>{
                 this.cursorLater=0;
@@ -93,22 +95,33 @@ var ProjectPanel=class ProjectPanel {
                         number.set_position(0,box.y1+position.y);
                     });
                 }
-                const [valid,,y,height]=text.position_to_coords(text.get_cursor_position());
-                if(!valid)return GLib.SOURCE_REMOVE;
-                const adjustment=this.bodyScroll.get_vscroll_bar().get_adjustment();
-                const top=y+10, bottom=top+height+10;
-                let value=adjustment.value;
-                if(top<value)value=top;
-                else if(bottom>value+adjustment.page_size)value=bottom-adjustment.page_size;
-                adjustment.value=Math.max(adjustment.lower,Math.min(value,adjustment.upper-adjustment.page_size));
+                if(revealRequested && !this.cursorScrollLater) {
+                    // Wait for the new actor height and adjustment range to be allocated.
+                    this.cursorScrollLater=Meta.later_add(Meta.LaterType.BEFORE_REDRAW,()=>{
+                        this.cursorScrollLater=0;
+                        revealRequested=false;
+                        if(!this.bodyScroll.mapped)return GLib.SOURCE_REMOVE;
+                        const bounds=TextLayout.cursorBounds(text,box.x2-box.x1,this.body.text);
+                        const adjustment=this.bodyScroll.get_vscroll_bar().get_adjustment();
+                        const top=bounds.y+box.y1, bottom=top+bounds.height+10;
+                        let value=adjustment.value;
+                        if(top<value)value=top;
+                        else if(bottom>value+adjustment.page_size)value=bottom-adjustment.page_size;
+                        adjustment.value=Math.max(adjustment.lower,Math.min(value,adjustment.upper-adjustment.page_size));
+                        return GLib.SOURCE_REMOVE;
+                    });
+                }
                 return GLib.SOURCE_REMOVE;
             });
         };
+        this.bodyScroll.get_vscroll_bar().get_adjustment().connect('changed',()=>{
+            if(global.stage.get_key_focus()===text)revealCursor();
+        });
         this.revealCursor=revealCursor;
         this.body.connect('style-changed',()=>{text._pingooseTextStyle=null;revealCursor();});
-        text.connect('notify::allocation',revealCursor);
-        text.connect('text-changed',revealCursor);
-        text.connect('notify::cursor-position',revealCursor);
+        text.connect('notify::allocation',()=>revealCursor(false));
+        text.connect('text-changed',()=>revealCursor());
+        text.connect('notify::cursor-position',()=>revealCursor());
         this.editor.add_child(this.name);this.editor.add_child(this.bodyScroll);
         const actions=new St.BoxLayout({style_class:'pingoose-chat-input-row'});
         actions.add_child(this.button('Save',()=>this.save()));actions.add_child(this.button('Cancel',()=>{this.editing=null;this.drafts.delete(this.key());this.renderEditor();}));
@@ -303,5 +316,5 @@ var ProjectPanel=class ProjectPanel {
         const value=Notes.save({...this.editing,project:this.project.slug,projectName:this.project.name,login:this.project.login,kind:this.kind,title:this.kind==='todo'?'':this.name.text.trim() || 'Untitled',body});
         this.editing=null;this.drafts.delete(this.key());this.renderList();this.renderEditor();this.status.text='Saved locally.';
     }catch(_){this.status.text=this.kind==='todo'?'Enter at least one task and retry.':'Enter some content and retry.';}}
-    destroy(){if(this.listHeightLater)Meta.later_remove(this.listHeightLater);this.listHeightLater=0;if(this.cursorLater)Meta.later_remove(this.cursorLater);this.cursorLater=0;if(this.refreshTimer)GLib.source_remove(this.refreshTimer);this.refreshTimer=0;this.monitor.cancel();this.drafts.clear();}
+    destroy(){if(this.cursorScrollLater)Meta.later_remove(this.cursorScrollLater);this.cursorScrollLater=0;if(this.listHeightLater)Meta.later_remove(this.listHeightLater);this.listHeightLater=0;if(this.cursorLater)Meta.later_remove(this.cursorLater);this.cursorLater=0;if(this.refreshTimer)GLib.source_remove(this.refreshTimer);this.refreshTimer=0;this.monitor.cancel();this.drafts.clear();}
 };

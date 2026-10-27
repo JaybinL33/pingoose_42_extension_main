@@ -192,7 +192,7 @@ var ChatPanel = class ChatPanel {
         this._chatActive = null;
         const ui = this._chatUi = {stick: true};
         const root = new St.BoxLayout({vertical: true, reactive: true, visible: false,
-            y_expand: false, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-chat pingoose-chat-panel'});
+            y_expand: false, request_mode: Clutter.RequestMode.HEIGHT_FOR_WIDTH, y_align: Clutter.ActorAlign.START, style_class: 'pingoose-chat pingoose-chat-panel'});
         ui.root = root;
         // Share the popup grab so interacting with chat does not close the main menu.
         const bin = indicator.menu._boxPointer.bin;
@@ -279,7 +279,7 @@ var ChatPanel = class ChatPanel {
         ui.peerRow.add_child(ui.peerEntry);
         ui.peerRow.add_child(connect);
         root.add_child(ui.peerRow);
-        ui.peerFeedback = wrapLabel(new St.Label({visible: false, x_expand: true, style_class: 'pingoose-chat-connect-error'}));
+        ui.peerFeedback = wrapLabel(new St.Label({visible: false, x_expand: true, request_mode: Clutter.RequestMode.HEIGHT_FOR_WIDTH, style_class: 'pingoose-chat-connect-error'}));
         root.add_child(ui.peerFeedback);
         const submitPeer = () => {
             if(!Flags.enabled(this._settings,'hidden-cluster-chat'))return;

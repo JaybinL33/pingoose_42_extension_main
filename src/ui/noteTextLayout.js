@@ -39,3 +39,16 @@ function logicalLinePositions(text, width, value) {
         return {y: position.y / Pango.SCALE};
     });
 }
+
+// Measure the caret in the same wrapped layout as the editor, independent of
+// Clutter.Text's internal scrolling offset during a text/allocation change.
+function cursorBounds(text, width, value) {
+    const layout=text.get_layout().copy();
+    layout.set_width(Math.max(1,Math.floor(width))*Pango.SCALE);
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR);
+    layout.set_text(value,-1);
+    const position=text.get_cursor_position();
+    const prefix=position<0?value:Array.from(value).slice(0,position).join('');
+    const rectangle=layout.index_to_pos(imports.byteArray.fromString(prefix).length);
+    return {y:rectangle.y/Pango.SCALE,height:rectangle.height/Pango.SCALE};
+}

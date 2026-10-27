@@ -2,7 +2,7 @@ const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/st
 const Model=require('../models/evaluations.js');
 const source=fs.readFileSync('src/worker/webview.js','utf8');
 const method=source.slice(source.indexOf('    receive(text, identity) {'),source.indexOf('    publishEvaluations() {'));
-const notices=[],ctx={GLib:{timeout_add:()=>1,source_remove:()=>{}},Model,Date,now:()=>100,status:()=>{},emit:event=>notices.push(event)};
+const notices=[],ctx={imports:{models:{evaluationFeedback:require('../models/evaluationFeedback.js')}},GLib:{timeout_add:()=>1,source_remove:()=>{}},Model,Date,now:()=>100,status:()=>{},emit:event=>notices.push(event)};
 vm.createContext(ctx);const Probe=vm.runInContext('(class {'+method+'})',ctx);
 let saved=Model.advanceSeen(null,'me',[]).state;
 const p=new Probe();
@@ -57,5 +57,11 @@ const frozen=JSON.stringify(saved.evaluations.find(r=>r.id==='9'));
 receive([{...past,user:'other',project_name:'Changed'}]);
 assert.equal(JSON.stringify(saved.evaluations.find(r=>r.id==='9')),frozen,'past evaluation is frozen');
 receive([]);
-assert.equal(JSON.stringify(saved.evaluations.find(r=>r.id==='9')),frozen,'past evaluation disappearance is not missing');
+assert.equal(saved.evaluations.find(r=>r.id==='9'),undefined,'completed evaluator disappears after validated refresh');
+assert(saved.dismissed.includes('9'));
+// A restored past card must reconcile on the very first successful login response.
+saved.evaluations.push({...JSON.parse(frozen),id:'10'});
+receive([]);assert(saved.dismissed.includes('10'));
+const evaluatee={...JSON.parse(frozen),id:'11',kind:'evaluated'};
+saved.evaluations.push(evaluatee);receive([]);assert(saved.evaluations.some(r=>r.id==='11'));
 console.log('PASS: post-start snapshot freezes and normal disappearance does not create a missing flag');

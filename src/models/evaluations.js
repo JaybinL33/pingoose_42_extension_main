@@ -69,6 +69,11 @@ function storedState(text) {
         const parsed = parseRows([{...row, begin_at: row.begin, project_name: row.project,
             user: row.users, project_slug: row.slug}])[0];
         if (!parsed) throw new Error('storage-error');
+        const watch = row.feedbackWatch;
+        if (watch && /^[a-zA-Z0-9_-]{1,100}$/.test(watch.slug) && /^team-\d+$/.test(watch.team) &&
+            typeof watch.stamp === 'string' && watch.stamp.length <= 100 && /^[a-zA-Z0-9_-]{1,64}$/.test(watch.peer))
+            parsed.feedbackWatch = {slug:watch.slug,team:watch.team,stamp:watch.stamp,peer:watch.peer};
+        if (row.devTest === true) parsed.devTest = true;
         parsed.missing=row.missing===true;
         parsed.missingAt=Number.isFinite(row.missingAt)?row.missingAt:null;
         parsed.avatars = Array.isArray(row.avatars) ? row.avatars.filter(login => parsed.users.includes(login)) : [];

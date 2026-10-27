@@ -221,6 +221,7 @@ class Worker {
                     else if (!this.emptyProjectsSince) this.emptyProjectsSince = now();
                     if (!this.emptyProjectsSince || now() - this.emptyProjectsSince < 6) profile.projects = null;
                 } else this.emptyProjectsSince = null;
+                if (Array.isArray(profile.projects)) this.profileProjects = profile.projects;
                 emit({type: 'profile', login: identity.login, ...profile, avatar: undefined});
                 if(coreReady && Array.isArray(profile.projects) && !this.view.is_loading)this.refreshPart('profile');
                 if (profile.avatar && profile.avatar !== this.avatarURL) this.loadAvatar(profile.avatar, identity);
@@ -532,8 +533,8 @@ class Worker {
     }
 
     receive(text, identity) {
-        let rows;
-        try { rows = Model.parseRows(JSON.parse(text)); }
+        let rows, completeList;
+        try { const raw = JSON.parse(text); rows = Model.parseRows(raw); completeList = raw.length === rows.length; }
         catch (_) { this.fail('response-error'); return false; }
         let plan;
         let previousRows = new Map();
@@ -559,6 +560,12 @@ class Worker {
                     retained.set(id,missing);missingNotices.push(missing);
                 }
             }
+            // Only a successful, validated current-account response proves absence.
+            // This also reconciles cards restored from disk on the first login poll.
+            const completed = completeList ? imports.models.evaluationFeedback.completedEvaluators([...retained.values()], rows) : [];
+            for (const id of completed) retained.delete(id);
+            plan.state.dismissed = [...new Set([...plan.state.dismissed, ...completed])].slice(-2000);
+            plan.state.reminders = plan.state.reminders.filter(key => !completed.some(id => key.startsWith(`${id}:`)));
             plan.state.evaluations = [...retained.values()];
             this.evaluationState = plan.state;
             if (JSON.stringify(previous) !== JSON.stringify(plan.state)) this.writeState(plan.state);
@@ -566,7 +573,12 @@ class Worker {
         // shortcut: a crash after saving can lose delivery; add acknowledgements if durable delivery is needed.
         for (const row of plan.added) emit(Model.notification(row));
         for(const row of missingNotices)emit({type:'notification',id:`missing:${row.id}:${row.missingAt}`,body:`Evaluation Missing · ${row.project}\nThis match is no longer listed. It may have been cancelled.`});
+        for (const id of previousRows.keys()) if (this.evaluationState.dismissed.includes(id)) {
+            for (const key of this.counterpartChecks?.keys() || []) if (key.startsWith(`${id}:`)) this.counterpartChecks.delete(key);
+            emit({type:'evaluation-dismissed',id});
+        }
         this.publishEvaluations();
+        this.pollEvaluationFeedback();
         for (const row of rows) {
             const previous = previousRows.get(row.id);
             if(previous && Date.parse(previous.begin)<=Date.now())continue;
@@ -603,6 +615,7 @@ class Worker {
             if(remaining>899000)delay=Math.min(delay,remaining-899000);
             else if(remaining>0)
                 delay=Math.min(delay,5000);
+
         }
         this.nextPoll=Math.max(now()+delay/1000,this.notBefore);
         if(this.evaluationPollTimer)GLib.source_remove(this.evaluationPollTimer);
@@ -610,6 +623,42 @@ class Worker {
             this.evaluationPollTimer=0;
             if(!stopped && this.auth && !this.signedOut && !this.pending && now()>=this.notBefore && now()>=this.nextPoll)this.poll();
             return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    pollEvaluationFeedback() {
+        if (!this.auth || !this.evaluationState || this.feedbackChecker?.view) return;
+        this.feedbackDue ||= new Map();
+        const model = imports.models.evaluationFeedback;
+        const groups = new Map();
+        for (const row of this.evaluationState.evaluations) {
+            if (!model.eligibleEvaluatee(row)) continue;
+            const slug = row.feedbackWatch?.slug || row.slug || this.profileProjects?.find(p =>
+                p.name.toLowerCase() === row.project.toLowerCase())?.slug;
+            if (!slug || !/^[a-zA-Z0-9_-]{1,100}$/.test(slug)) continue;
+            if (!groups.has(slug)) groups.set(slug, []);
+            groups.get(slug).push({id:row.id,begin:row.begin});
+        }
+        const selected = [...groups].find(([slug]) => now() >= (this.feedbackDue.get(slug) || 0));
+        if (!selected) return;
+        const [slug, rows] = selected;
+        const identity = this.auth;
+        this.feedbackDue.set(slug, now() + 30);
+        this.feedbackChecker ||= new imports.services.evaluationFeedback.Checker(this.context, allowedURI);
+        this.feedbackChecker.run(identity.login, slug, page => {
+            if (stopped || this.auth !== identity || !this.evaluationState) return;
+            let changed = false;
+            for (const checked of rows) {
+                const row = this.evaluationState.evaluations.find(r => r.id === checked.id && r.begin === checked.begin);
+                if (!row || !model.eligibleEvaluatee(row)) continue;
+                const result = model.inspect(row, page, slug);
+                if (result.state === 'complete') this.command('feedback:' + row.id);
+                else if (result.watch && JSON.stringify(row.feedbackWatch) !== JSON.stringify(result.watch)) {
+                    row.feedbackWatch = result.watch;
+                    changed = true;
+                }
+            }
+            if (changed) this.writeState(this.evaluationState);
         });
     }
 
@@ -749,7 +798,7 @@ class Worker {
             this.nextProfileRead = now() + 3;
             this.view.reload_bypass_cache();
         }
-        if (this.auth) { this.refreshLogtime(); this.pollAgenda(); }
+        if (this.auth) { this.refreshLogtime(); this.pollAgenda(); this.pollEvaluationFeedback(); }
         if (this.auth && now() >= this.nextProfileRead) this.readProfile();
         if (!this.auth && now() >= this.reloadAt) {
             this.reloadAt = Infinity;
@@ -846,6 +895,10 @@ class Worker {
         this.profileCampus = null;
         this.clusterCampus = null;
         this.cancelClusterLookup?.();
+        this.feedbackChecker?.close();
+        this.feedbackChecker = null;
+        this.feedbackDue = null;
+        this.profileProjects = null;
         this.slotsService?.close();
         this.slotsService = null;
         this.evaluationState = null;
@@ -1077,6 +1130,10 @@ class Worker {
         this.cancelClusterLookup?.();
         this.closeServices();
         for (const window of this.projectWindows || []) window.destroy();
+        this.feedbackChecker?.close();
+        this.feedbackChecker = null;
+        this.feedbackDue = null;
+        this.profileProjects = null;
         this.slotsService?.close();
         this.cancel.cancel();
         this.pending?.cancel();

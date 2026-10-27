@@ -36,3 +36,16 @@ if(unicode.length!==3 || unicode[1].y<=unicode[0].y || unicode[2].y<=unicode[1].
 const long=positions(editor,100,'abcdefghij'.repeat(6)+'\nsecond');
 if(long.length!==2 || long[1].y<=typed[1].y)throw Error('Wrapped paragraphs did not preserve logical numbering');
 print('PASS: line numbers stay stable while typing and follow wrapping, Unicode, and trailing newlines');
+
+const caret=imports.ui.noteTextLayout.cursorBounds;
+const caretActor=actor('가나다 abc '.repeat(100));
+caretActor.get_cursor_position=()=>-1;
+const end=caret(caretActor,100,'가나다 abc '.repeat(100));
+caretActor.get_cursor_position=()=>8;
+const middle=caret(caretActor,100,'가나다 abc '.repeat(100));
+if(end.y<=middle.y || middle.y<0 || end.height<=0)throw Error('Wrapped caret position invalid');
+caretActor.get_cursor_position=()=>-1;
+const newline=caret(caretActor,100,'a\nb\n');
+const before=caret(caretActor,100,'a\nb');
+if(newline.y<=before.y)throw Error('Trailing newline does not reveal the next line');
+print('PASS: caret bounds track Unicode, soft wrapping, middle edits and trailing newlines');
